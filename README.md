@@ -53,6 +53,7 @@ Commands
 ----
 
     ftl spool <filename.tar.gz>   # Upload new revision
+    ftl list                      # List available revisions
     ftl sync                      # Check S3 for new stuff to do (new revisions, remove revisions, bless)
     ftl jump <rev name>           # Bless the specified revision
     ftl jump --master <rev name>  # Mark the revision blessed in S3 (only needs to be done by one node)
