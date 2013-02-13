@@ -2,6 +2,7 @@ package main
 
 import "fmt"
 import "os"
+import "path/filepath"
 import "strings"
 import goopt "github.com/droundy/goopt"
 
@@ -16,6 +17,7 @@ func optFail(message string) {
 
 func spoolCmd(fileName string) {
 	fmt.Println("Working with", fileName)
+	
 }
 
 func syncCmd() {
@@ -36,7 +38,12 @@ func main() {
 			case "spool":
 				if (len(goopt.Args) > 1) {
 					fileName := strings.TrimSpace(goopt.Args[1])
-					spoolCmd(fileName)
+					fullPath, err := filepath.Abs(fileName)
+					if err != nil {
+						optFail("Unable to parse path")
+					}
+					
+					spoolCmd(fullPath)
 				} else {
 					optFail("Missing file name")
 				}
