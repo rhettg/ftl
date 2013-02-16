@@ -2,8 +2,12 @@ package main
 
 import "fmt"
 import "os"
-//import "io"
+import "io"
+import "time"
+import "encoding/binary"
+import "encoding/base64"
 import "path/filepath"
+import "crypto/md5"
 import "strings"
 import goopt "github.com/droundy/goopt"
 import "launchpad.net/goamz/s3"
@@ -18,15 +22,52 @@ func optFail(message string) {
 		os.Exit(1)
 }
 
+func encodeBytes(b []byte) (s string) {
+	enc := base64.NewEncoding("-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
+	s = enc.EncodeToString(b)
+	return
+}
+
+func buildRevisionId(fileName string) (string, error) {
+	// Revsion id will be based on a combination of encoding timestamp and sha1 of the file.
+	
+	h := md5.New()
+	
+	file, err := os.Open(fileName)
+	if err != nil {
+		fmt.Println("Error opening file", err)
+		return "", err
+	}
+
+	_, err = io.Copy(h, file)
+	if err != nil {
+		fmt.Println("Error copying file", err)
+		return "", err
+	}
+	
+	hashEncode := encodeBytes(h.Sum(nil))
+	
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(time.Now().Unix()))
+	timeStampEncode := encodeBytes(buf)
+	
+	// We're using pieces of our encoding data:
+	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)
+	//  * For our hash, we're only using 2 bytes
+	return fmt.Sprintf("%s%s", timeStampEncode[4:len(timeStampEncode)-1], hashEncode[:2]), nil
+}
+
 func spoolCmd(auth aws.Auth, fileName string) {
-	fmt.Println("Working with", fileName)
+	revisionId, err := buildRevisionId(fileName)
+	if err != nil {
+		fmt.Println("Failed to build revision id")
+		return
+	}
 	
 	name := filepath.Base(fileName)
 	parts := strings.Split(name, ".")
 	nameBase := parts[0]
 	ext := parts[1]
-	
-	revisionId := "1"
 	
 	myS3 := s3.New(auth, aws.USEast)
 	bucket := myS3.Bucket("ftl-rhettg")
@@ -46,8 +87,10 @@ func spoolCmd(auth aws.Auth, fileName string) {
 	
 	defer file.Close()
 	
-	s3Path := fmt.Sprintf("%s-%s.%s", nameBase, revisionId, ext)
+	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, ext)
 	bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
+	
+	fmt.Printf("%s.%s\n", nameBase, revisionId)
 
 	/*
 	files, err := bucket.List("/", "", "", 10)
