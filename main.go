@@ -57,7 +57,7 @@ func buildRevisionId(fileName string) (string, error) {
 	return fmt.Sprintf("%s%s", timeStampEncode[4:len(timeStampEncode)-1], hashEncode[:2]), nil
 }
 
-func spoolCmd(auth aws.Auth, fileName string) {
+func spoolCmd(bucket *s3.Bucket, fileName string) {
 	revisionId, err := buildRevisionId(fileName)
 	if err != nil {
 		fmt.Println("Failed to build revision id")
@@ -68,10 +68,6 @@ func spoolCmd(auth aws.Auth, fileName string) {
 	parts := strings.Split(name, ".")
 	nameBase := parts[0]
 	ext := parts[1]
-	
-	myS3 := s3.New(auth, aws.USEast)
-	bucket := myS3.Bucket("ftl-rhettg")
-	_ = bucket
 	
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -92,18 +88,26 @@ func spoolCmd(auth aws.Auth, fileName string) {
 	
 	fmt.Printf("%s.%s\n", nameBase, revisionId)
 
-	/*
-	files, err := bucket.List("/", "", "", 10)
-	if err != nil {
-		fmt.Println("Failed listing", err)
-		return
-	}
-	_ = files
-	*/
 }
 
 func syncCmd() {
 	fmt.Println("Sync")
+}
+
+func listCmd(bucket *s3.Bucket, packageName string) {
+	fmt.Println("listCmd")
+}
+
+func listPackagesCmd(bucket *s3.Bucket) {
+	listResp, err := bucket.List("", ".", "", 1000)
+	if err != nil {
+		fmt.Println("Failed listing", err)
+		return
+	}
+	
+	for _, prefix := range listResp.CommonPrefixes {
+		fmt.Println(prefix)
+	}
 }
 
 func main() {
@@ -119,6 +123,9 @@ func main() {
 		optFail(fmt.Sprintf("AWS error: %s", err))
     }
 	
+	myS3 := s3.New(auth, aws.USEast)
+	
+	bucket := myS3.Bucket("ftl-rhettg")
 
 	if len(goopt.Args) > 0 {
 		cmd := strings.TrimSpace(goopt.Args[0])
@@ -131,10 +138,16 @@ func main() {
 						optFail("Unable to parse path")
 					}
 					
-					spoolCmd(auth, fullPath)
+					spoolCmd(bucket, fullPath)
 				} else {
 					optFail("Missing file name")
 				}
+			case "list":
+				if (len(goopt.Args) > 1) {
+						listCmd(bucket, strings.TrimSpace(goopt.Args[1]))
+					} else {
+						listPackagesCmd(bucket)
+					}
 			case "sync":
 				syncCmd()
 			default:
