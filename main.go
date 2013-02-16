@@ -57,6 +57,23 @@ func buildRevisionId(fileName string) (string, error) {
 	return fmt.Sprintf("%s%s", timeStampEncode[4:len(timeStampEncode)-1], hashEncode[:2]), nil
 }
 
+func blessedRevision(bucket *s3.Bucket, packageName string) string {
+	blessFile := fmt.Sprintf("%s.bless", packageName)
+	
+	data, err := bucket.Get(blessFile)
+	if err != nil {
+		s3Error, _ := err.(*s3.Error)
+		if s3Error.StatusCode == 404 {
+			return ""
+		} else {
+			fmt.Printf("Error finding bless file", err)
+			return ""
+		}
+	}
+	
+	return string(data)
+}
+
 func spoolCmd(bucket *s3.Bucket, fileName string) {
 	revisionId, err := buildRevisionId(fileName)
 	if err != nil {
@@ -94,7 +111,23 @@ func syncCmd() {
 	fmt.Println("Sync")
 }
 
+func blessCmd(bucket *s3.Bucket, blessName string) {
+	blessParts := strings.Split(blessName, ".")
+	packageName := blessParts[0]
+	revisionName := blessParts[1]
+	
+	blessFile := fmt.Sprintf("%s.bless", packageName)
+	
+	err := bucket.Put(blessFile, []byte(revisionName), "text/plain", s3.Private)
+	if err != nil {
+		fmt.Printf("Failed to put bless file", err)
+		}
+
+}
+
 func listCmd(bucket *s3.Bucket, packageName string) {
+	blessed := blessedRevision(bucket, packageName)
+	
 	listResp, err := bucket.List(packageName + ".", ".", "", 1000)
 	if err != nil {
 		fmt.Println("Failed listing", err)
@@ -102,7 +135,12 @@ func listCmd(bucket *s3.Bucket, packageName string) {
 	}
 	
 	for _, prefix := range listResp.CommonPrefixes {
-		fmt.Println(prefix[:len(prefix)-1])
+		revisionName := prefix[:len(prefix)-1]
+		if strings.HasSuffix(revisionName, blessed) {
+			fmt.Printf("%s\t(blessed)\n", revisionName)
+		} else {
+			fmt.Println(revisionName)
+		}
 	}
 }
 
@@ -149,6 +187,13 @@ func main() {
 					spoolCmd(bucket, fullPath)
 				} else {
 					optFail("Missing file name")
+				}
+			case "bless":
+				if (len(goopt.Args) > 1) {
+					blessName := strings.TrimSpace(goopt.Args[1])
+					blessCmd(bucket, blessName)
+				} else {
+					optFail("Bless what?")
 				}
 			case "list":
 				if (len(goopt.Args) > 1) {
