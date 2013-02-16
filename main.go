@@ -95,7 +95,15 @@ func syncCmd() {
 }
 
 func listCmd(bucket *s3.Bucket, packageName string) {
-	fmt.Println("listCmd")
+	listResp, err := bucket.List(packageName + ".", ".", "", 1000)
+	if err != nil {
+		fmt.Println("Failed listing", err)
+		return
+	}
+	
+	for _, prefix := range listResp.CommonPrefixes {
+		fmt.Println(prefix[:len(prefix)-1])
+	}
 }
 
 func listPackagesCmd(bucket *s3.Bucket) {
@@ -106,7 +114,7 @@ func listPackagesCmd(bucket *s3.Bucket) {
 	}
 	
 	for _, prefix := range listResp.CommonPrefixes {
-		fmt.Println(prefix)
+		fmt.Println(prefix[:len(prefix)-1])
 	}
 }
 
