@@ -4,7 +4,7 @@ import "encoding/base64"
 import "strings"
 
 func encodeBytes(b []byte) (s string) {
-	enc := base64.NewEncoding("-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
+	enc := base64.NewEncoding("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~")
 	s = enc.EncodeToString(b)
 	return
 }

@@ -42,7 +42,7 @@ func (lr *LocalRepository) ListPackages() (packageNames []string) {
 }
 
 func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []string) {
-	packagePath := filepath.Join(lr.BasePath, "revs")
+	packagePath := filepath.Join(lr.BasePath, packageName, "revs")
 	
 	localRevisions = make([]string, 0, 1000)
 	
@@ -70,7 +70,7 @@ func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []s
 	}
 	
 	for _, fileInfo := range localRevisionFiles {
-		localRevisions = append(localRevisions, fileInfo.Name())
+		localRevisions = append(localRevisions, strings.Join([]string{packageName, fileInfo.Name()}, "."))
 	}
 	return
 }
@@ -103,7 +103,7 @@ func (lr *LocalRepository) GetActiveRevision(packageName string) (revisionName s
 	return
 }
 
-func (lr *LocalRepository) Add(name string, r io.Reader) (err error)  {
+func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error)  {
 	parts := strings.Split(name, ".")
 	packageName := parts[0]
 	revisionName := parts[1]
@@ -115,8 +115,7 @@ func (lr *LocalRepository) Add(name string, r io.Reader) (err error)  {
 		return
 	}
 	
-	revisionFilePath := filepath.Join(revisionPath, name)
-	fmt.Println("Writing to", revisionFilePath)
+	revisionFilePath := filepath.Join(revisionPath, fileName)
 	w, err := os.Create(revisionFilePath)
 	if err != nil {
 		return

@@ -43,7 +43,7 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) {
 func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) {
 	//packageName := ftl.NewRevisionInfo(revisionName).PackageName
 	
-	r, err := remote.GetRevisionReader(revisionName)
+	fileName, r, err := remote.GetRevisionReader(revisionName)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return 
@@ -52,7 +52,7 @@ func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepos
 		defer r.Close()
 	}
 	
-	err = local.Add(revisionName, r)
+	err = local.Add(revisionName, fileName, r)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return 
