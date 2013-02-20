@@ -5,13 +5,20 @@ import "os"
 import "io"
 import "path/filepath"
 
-type PackageRepository struct {
-	Name string
+type LocalRepository struct {
 	BasePath string
 }
 
-func (pr *PackageRepository) List() (localRevisions []string) {
-	packagePath := filepath.Join(pr.BasePath, pr.Name, "revs")
+func NewLocalRepository(basePath string) (lr *LocalRepository) {
+	return &LocalRepository{basePath}
+}
+
+func (lr *LocalRepository) ListPackages() (packageNames []string) {
+	return
+}
+
+func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []string) {
+	packagePath := filepath.Join(lr.BasePath, "revs")
 	
 	localRevisions = make([]string, 0, 1000)
 	
@@ -37,13 +44,13 @@ func (pr *PackageRepository) List() (localRevisions []string) {
 	return
 }
 
-func (pr *PackageRepository) Add(name string, r io.Reader) (err error)  {
+func (lr *LocalRepository) Add(name string, r io.Reader) (err error)  {
 	_ = name
 	_ = r
 	return
 }
 
-func (pr *PackageRepository) Remove(name string) (err error)  {
+func (lr *LocalRepository) Remove(name string) (err error)  {
 	_ = name
 	return 
 }

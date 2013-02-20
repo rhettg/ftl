@@ -40,31 +40,33 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) {
 	fmt.Println(revisionName)
 }
 
-func downloadPackageRevision(remote *ftl.RemoteRepository, pkg *ftl.PackageRepository, revisionName string) {
-	r, err := remote.GetRevisionReader(pkg.Name, revisionName)
+func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) {
+	packageName := ftl.NewRevisionInfo(revisionName).PackageName
+	
+	r, err := remote.GetRevisionReader(packageName, revisionName)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return 
 	}
 	defer r.Close()
 	
-	err = pkg.Add(revisionName, r)
+	err = local.Add(revisionName, r)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return 
 	}
 }
 
-func removePackageRevision(pkg *ftl.PackageRepository, revisionName string) {
+func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
 	fmt.Println("Remove", revisionName)
-	_ = pkg.Remove(revisionName)
+	_ = local.Remove(revisionName)
 }
 
-func syncPackage(remote *ftl.RemoteRepository, pkg *ftl.PackageRepository) {
-	fmt.Println("Syncing", pkg.Name, "to path", pkg.BasePath)
+func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) {
+	fmt.Println("Syncing", packageName, "to path", local.BasePath)
 	
-	remoteRevisions := remote.ListRevisions(pkg.Name)
-	localRevisions := pkg.List()
+	remoteRevisions := remote.ListRevisions(packageName)
+	localRevisions := local.ListRevisions(packageName)
 	
 	fmt.Println("Found", len(remoteRevisions), "remote and", len(localRevisions), "local")
 	
@@ -85,15 +87,15 @@ func syncPackage(remote *ftl.RemoteRepository, pkg *ftl.PackageRepository) {
 			done = true
 		case localNdx >= len(localRevisions):
 			// We have more remote revisions than local, just download what's left
-			downloadPackageRevision(remote, pkg, remoteRevisions[remoteNdx])
+			downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
 			// We have an extra local revision, remove it
-			removePackageRevision(pkg, localRevisions[localNdx])
+			removePackageRevision(local, localRevisions[localNdx])
 			localNdx++
 		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
 			// We have a new remote revision, download it
-			downloadPackageRevision(remote, pkg, remoteRevisions[remoteNdx])
+			downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] == localRevisions[localNdx]:
 			remoteNdx++
@@ -103,30 +105,10 @@ func syncPackage(remote *ftl.RemoteRepository, pkg *ftl.PackageRepository) {
 	
 }
 
-func syncCmd(remote *ftl.RemoteRepository, ftlRoot string) {
-	rootFile, err := os.Open(ftlRoot)
-	if err != nil {
-		fmt.Println("Failed to open root", ftlRoot, err)
-		return
+func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
+	for _, packageName := range local.ListPackages() {
+		syncPackage(remote, local, packageName)
 	}
-
-	dirContents, err := rootFile.Readdir(1024)
-	if err != nil {
-		if err.Error() == "EOF" {
-			// Nothing
-		} else {
-			fmt.Println("Failed to read root", ftlRoot, err)
-			return
-		}
-	}
-	
-	for _, file := range dirContents {
-		if file.IsDir() {
-			pkg := ftl.PackageRepository{ftlRoot, file.Name()}
-			syncPackage(remote, &pkg)
-		}
-	}
-	
 }
 
 func jumpCmd(remote *ftl.RemoteRepository, revName string) {
@@ -177,6 +159,7 @@ func main() {
     }
 	
 	remote := ftl.NewRemoteRepository("ftl-rhettg", auth, aws.USEast)
+	local := ftl.NewLocalRepository(ftlRoot)
 	
 	if len(goopt.Args) > 0 {
 		cmd := strings.TrimSpace(goopt.Args[0])
@@ -207,7 +190,7 @@ func main() {
 						listPackagesCmd(remote)
 					}
 			case "sync":
-				syncCmd(remote, ftlRoot)
+				syncCmd(remote, local)
 			default:
 				optFail(fmt.Sprintf("Invalid command: %s", cmd))
 		}
