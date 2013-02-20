@@ -12,6 +12,8 @@ import "github.com/rhettg/ftl/ftl"
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 	"output verbosely", "be quiet, instead")
 
+var amMaster = goopt.Flag([]string{"--master"}, nil, "Execute against master repository", "")
+
 func optFail(message string) {
 		fmt.Println(message)
 		fmt.Print(goopt.Help())
@@ -144,8 +146,26 @@ func listCmd(lr *ftl.LocalRepository, packageName string) {
 	}
 }
 
+func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) {
+	activeRev := rr.GetActiveRevision(packageName)
+	
+	for _, revisionName := range rr.ListRevisions(packageName) {
+		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
+			fmt.Printf("%s\t(active)\n", revisionName)
+		} else {
+			fmt.Println(revisionName)
+		}
+	}
+}
+
 func listPackagesCmd(local *ftl.LocalRepository) {
 	for _, revision := range local.ListPackages() {
+		fmt.Println(revision)
+	}
+}
+
+func listRemotePackagesCmd(remote *ftl.RemoteRepository) {
+	for _, revision := range remote.ListPackages() {
 		fmt.Println(revision)
 	}
 }
@@ -194,16 +214,27 @@ func main() {
 				if (len(goopt.Args) > 1) {
 					revName := strings.TrimSpace(goopt.Args[1])
 					
-					//jumpRemoteCmd(remote, revName)
-					jumpCmd(local, revName)
+					if *amMaster {
+						jumpRemoteCmd(remote, revName)
+					} else {
+						jumpCmd(local, revName)
+					}
 				} else {
 					optFail("Jump where?")
 				}
 			case "list":
 				if (len(goopt.Args) > 1) {
-						listCmd(local, strings.TrimSpace(goopt.Args[1]))
+						if *amMaster {
+							listRemoteCmd(remote, strings.TrimSpace(goopt.Args[1]))
+						} else {
+							listCmd(local, strings.TrimSpace(goopt.Args[1]))
+						}
 					} else {
-						listPackagesCmd(local)
+						if *amMaster {
+							listRemotePackagesCmd(remote)
+						} else {
+							listPackagesCmd(local)
+							}
 					}
 			case "sync":
 				syncCmd(remote, local)
