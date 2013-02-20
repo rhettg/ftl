@@ -81,24 +81,18 @@ func (lr *LocalRepository) activeRevisionFilePath(packageName string) string {
 }
 
 func (lr *LocalRepository) GetActiveRevision(packageName string) (revisionName string) {
-	revFilePath := lr.activeRevisionFilePath(packageName)
+	activeFilePath := lr.activeRevisionFilePath(packageName)
 	
-	statInfo, err := os.Lstat(revFilePath)
+	revFilePath, err := os.Readlink(activeFilePath)
 	if err != nil {
-		if pe, ok := err.(*os.PathError); ok {
-			err = pe.Err
-		}
-		
-		if err != syscall.ENOENT {
-			fmt.Printf("Failed to stat", revFilePath, err)
+		if os.IsNotExist(err) {
 			return
 		}
-		
-		// Doesn't exist, no revision set
+		fmt.Println("Failed to read current revision", err)
 		return
 	}
 	
-	fmt.Println(statInfo)
+	revisionName = strings.Join([]string{packageName, filepath.Base(revFilePath)}, ".")
 	
 	return
 }
@@ -137,7 +131,27 @@ func (lr *LocalRepository) Remove(name string) (err error)  {
 }
 
 func (lr *LocalRepository) Jump(name string) (err error)  {
-	_ = name
+	revInfo := NewRevisionInfo(name)
+	
+	revFileName := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
+	
+	activeFileName := lr.activeRevisionFilePath(revInfo.PackageName)
+	
+	// We have to, maybe, remove the older revision link first.	
+	// Note that this isn't atomic, but neither is the ln command
+	err = os.Remove(activeFileName)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			fmt.Println("Failed to remove old version")
+			return
+		}	
+		
+	}
+	err = os.Symlink(revFileName, activeFileName)
+	if err != nil {
+		fmt.Println("Failed creating symlink", err)
+	}
+	
 	return 
 }
 
