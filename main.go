@@ -109,19 +109,25 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
 	for _, packageName := range local.ListPackages() {
 		syncPackage(remote, local, packageName)
 	}
+	
+	// TODO: and then jump
 }
 
-func jumpCmd(remote *ftl.RemoteRepository, revName string) {
+func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) {
 	revParts := strings.Split(revName, ".")
 	packageName := revParts[0]
 	
 	remote.Jump(packageName, revName)
 }
 
-func listCmd(rr *ftl.RemoteRepository, packageName string) {
-	activeRev := rr.GetActiveRevision(packageName)
+func jumpCmd(lr *ftl.LocalRepository, revName string) {
+	lr.Jump(revName)
+}
+
+func listCmd(lr *ftl.LocalRepository, packageName string) {
+	activeRev := lr.GetActiveRevision(packageName)
 	
-	for _, revisionName := range rr.ListRevisions(packageName) {
+	for _, revisionName := range lr.ListRevisions(packageName) {
 		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
 			fmt.Printf("%s\t(active)\n", revisionName)
 		} else {
@@ -130,8 +136,8 @@ func listCmd(rr *ftl.RemoteRepository, packageName string) {
 	}
 }
 
-func listPackagesCmd(remote *ftl.RemoteRepository) {
-	for _, revision := range remote.ListPackages() {
+func listPackagesCmd(local *ftl.LocalRepository) {
+	for _, revision := range local.ListPackages() {
 		fmt.Println(revision)
 	}
 }
@@ -179,15 +185,17 @@ func main() {
 			case "jump":
 				if (len(goopt.Args) > 1) {
 					revName := strings.TrimSpace(goopt.Args[1])
-					jumpCmd(remote, revName)
+					
+					//jumpRemoteCmd(remote, revName)
+					jumpCmd(local, revName)
 				} else {
 					optFail("Jump where?")
 				}
 			case "list":
 				if (len(goopt.Args) > 1) {
-						listCmd(remote, strings.TrimSpace(goopt.Args[1]))
+						listCmd(local, strings.TrimSpace(goopt.Args[1]))
 					} else {
-						listPackagesCmd(remote)
+						listPackagesCmd(local)
 					}
 			case "sync":
 				syncCmd(remote, local)
