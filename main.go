@@ -6,7 +6,6 @@ import "os"
 import "path/filepath"
 import "strings"
 import goopt "github.com/droundy/goopt"
-import "launchpad.net/goamz/s3"
 import "launchpad.net/goamz/aws"
 import "github.com/rhettg/ftl/ftl"
 
@@ -130,21 +129,15 @@ func syncCmd(remote *ftl.RemoteRepository, ftlRoot string) {
 	
 }
 
-func jumpCmd(bucket *s3.Bucket, revName string) {
+func jumpCmd(remote *ftl.RemoteRepository, revName string) {
 	revParts := strings.Split(revName, ".")
 	packageName := revParts[0]
-	revision := revParts[1]
 	
-	revFile := fmt.Sprintf("%s.rev", packageName)
-	
-	err := bucket.Put(revFile, []byte(revision), "text/plain", s3.Private)
-	if err != nil {
-		fmt.Printf("Failed to put rev file", err)
-	}
+	remote.Jump(packageName, revName)
 }
 
 func listCmd(rr *ftl.RemoteRepository, packageName string) {
-	activeRev := rr.GetBlessedRevision(packageName)
+	activeRev := rr.GetActiveRevision(packageName)
 	
 	for _, revisionName := range rr.ListRevisions(packageName) {
 		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
@@ -184,12 +177,7 @@ func main() {
     }
 	
 	remote := ftl.NewRemoteRepository("ftl-rhettg", auth, aws.USEast)
-	_ = remote
 	
-	myS3 := s3.New(auth, aws.USEast)
-	
-	bucket := myS3.Bucket("ftl-rhettg")
-
 	if len(goopt.Args) > 0 {
 		cmd := strings.TrimSpace(goopt.Args[0])
 		switch cmd {
@@ -208,7 +196,7 @@ func main() {
 			case "jump":
 				if (len(goopt.Args) > 1) {
 					revName := strings.TrimSpace(goopt.Args[1])
-					jumpCmd(bucket, revName)
+					jumpCmd(remote, revName)
 				} else {
 					optFail("Jump where?")
 				}

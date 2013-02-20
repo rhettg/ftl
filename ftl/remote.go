@@ -82,24 +82,6 @@ func (rr *RemoteRepository) GetRevisionReader(packageName, revisionName string) 
 	return
 }
 
-func (rr *RemoteRepository) GetBlessedRevision(packageName string) (revisionName string) {
-	revFile := fmt.Sprintf("%s.rev", packageName)
-	
-	data, err := rr.bucket.Get(revFile)
-	if err != nil {
-		s3Error, _ := err.(*s3.Error)
-		if s3Error.StatusCode == 404 {
-			return
-		} else {
-			fmt.Printf("Error finding rev file", err)
-			return
-		}
-	}
-	
-	revisionName = string(data)
-	return
-}
-
 func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionName string, err error) {
 	statInfo, err := file.Stat()
 	if err != nil {
@@ -121,5 +103,40 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionNa
 	
 	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, ext)
 	rr.bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
+	return
+}
+
+func (rr *RemoteRepository) activeRevisionFilePath(packageName string) (revisionPath string) {
+	revisionPath = fmt.Sprintf("%s.rev", packageName)
+	return
+}
+
+func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName string) {
+	revFile := rr.activeRevisionFilePath(packageName)
+	
+	data, err := rr.bucket.Get(revFile)
+	if err != nil {
+		s3Error, _ := err.(*s3.Error)
+		if s3Error.StatusCode == 404 {
+			return
+		} else {
+			fmt.Printf("Error finding rev file", err)
+			return
+		}
+	}
+	
+	revisionName = string(data)
+	return
+}
+
+	
+func (rr *RemoteRepository) Jump(packageName, revisionName string) (err error) {
+	// TODO: Verify revision?
+	activeFile := rr.activeRevisionFilePath(packageName)
+	
+	err = rr.bucket.Put(activeFile, []byte(revisionName), "text/plain", s3.Private)
+	if err != nil {
+		fmt.Printf("Failed to put rev file", err)
+	}
 	return
 }
