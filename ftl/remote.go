@@ -78,7 +78,17 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string) {
 	return
 }
 
-func (rr *RemoteRepository) GetRevisionReader(packageName, revisionName string) (reader io.ReadCloser, err error) {
+func (rr *RemoteRepository) GetRevisionReader(revisionName string) (reader io.ReadCloser, err error) {
+	listResp, err := rr.bucket.List(revisionName, "", "", 1)
+	if err != nil {
+		fmt.Println("Failed listing", err)
+		return
+	}
+	
+	if len(listResp.Contents) > 0 {
+		reader, err = rr.bucket.GetReader(listResp.Contents[0].Key)
+	}
+	
 	return
 }
 

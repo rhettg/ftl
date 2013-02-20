@@ -2,7 +2,9 @@ package ftl
 
 import "fmt"
 import "os"
+import "strings"
 import "syscall"
+import "errors"
 import "io"
 import "path/filepath"
 
@@ -102,8 +104,31 @@ func (lr *LocalRepository) GetActiveRevision(packageName string) (revisionName s
 }
 
 func (lr *LocalRepository) Add(name string, r io.Reader) (err error)  {
-	_ = name
-	_ = r
+	parts := strings.Split(name, ".")
+	packageName := parts[0]
+	revisionName := parts[1]
+
+	revisionPath := filepath.Join(lr.BasePath, packageName, "revs", revisionName)
+	
+	err = os.Mkdir(revisionPath, 0755)
+	if err != nil {
+		return
+	}
+	
+	revisionFilePath := filepath.Join(revisionPath, name)
+	fmt.Println("Writing to", revisionFilePath)
+	w, err := os.Create(revisionFilePath)
+	if err != nil {
+		return
+	}
+	
+	defer w.Close()
+	
+	_, err = io.Copy(w, r)
+	if err != nil {
+		return
+	}
+	
 	return
 }
 
@@ -116,4 +141,46 @@ func (lr *LocalRepository) Jump(name string) (err error)  {
 	_ = name
 	return 
 }
+
+func (lr *LocalRepository) CheckPackage(packageName string) (err error)  {
+	pkgPath := filepath.Join(lr.BasePath, packageName)
+	
+	// Make sure we have the right files
+	statInfo, err := os.Stat(pkgPath)
+	if err != nil {
+		fmt.Printf("Package doesn't exist", pkgPath, err)
+		return
+	}
+
+	if !statInfo.IsDir() {
+		err = errors.New("Not a directory: " + pkgPath)
+		return
+	}
+		
+	revPath := filepath.Join(lr.BasePath, packageName, "revs")
+	revInfo, err := os.Stat(revPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.Mkdir(revPath, 0755)
+			if err != nil {
+				fmt.Printf("Failed to create rev path", revPath, err)
+				err = errors.New("Failed to create revs path")
+				return
+			}
+		} else {
+			fmt.Printf("Error opening revs directory")
+			return
+		}
+	} else {
+		if !revInfo.IsDir() {
+			fmt.Printf("Not a directory", revPath)
+			err = errors.New("Bad revs path")
+			return
+		}
+	}
+	
+	return 
+}
+
+
 
