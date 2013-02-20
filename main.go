@@ -13,6 +13,7 @@ import "strings"
 import goopt "github.com/droundy/goopt"
 import "launchpad.net/goamz/s3"
 import "launchpad.net/goamz/aws"
+import "github.com/rhettg/ftl/ftl"
 
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 	"output verbosely", "be quiet, instead")
@@ -21,49 +22,6 @@ func optFail(message string) {
 		fmt.Println(message)
 		fmt.Print(goopt.Help())
 		os.Exit(1)
-}
-
-type PackageRepository struct {
-	Name string
-	BasePath string
-}
-
-func (pr *PackageRepository) List() (localRevisions []string) {
-	packagePath := filepath.Join(pr.BasePath, pr.Name, "revs")
-	
-	localRevisions = make([]string, 1000)[0:0]
-	
-	packageFile, err := os.Open(packagePath)
-	if err != nil {
-		fmt.Println("Failed to open", packagePath)
-		return
-	}
-
-	localRevisionFiles, err := packageFile.Readdir(1024)
-	if err != nil {
-		if err.Error() == "EOF" {
-			// Nothing
-		} else {
-			fmt.Println("Failed to package file", packageFile, err)
-			return
-		}
-	}
-	
-	for _, fileInfo := range localRevisionFiles {
-		localRevisions = append(localRevisions, fileInfo.Name())
-	}
-	return
-}
-
-func (pr *PackageRepository) Add(name string, r io.Reader) (err error)  {
-	_ = name
-	_ = r
-	return
-}
-
-func (pr *PackageRepository) Remove(name string) (err error)  {
-	_ = name
-	return 
 }
 
 func encodeBytes(b []byte) (s string) {
@@ -101,23 +59,6 @@ func buildRevisionId(fileName string) (string, error) {
 	return fmt.Sprintf("%s%s", timeStampEncode[4:len(timeStampEncode)-1], hashEncode[:2]), nil
 }
 
-func blessedRevision(bucket *s3.Bucket, packageName string) string {
-	revFile := fmt.Sprintf("%s.rev", packageName)
-	
-	data, err := bucket.Get(revFile)
-	if err != nil {
-		s3Error, _ := err.(*s3.Error)
-		if s3Error.StatusCode == 404 {
-			return ""
-		} else {
-			fmt.Printf("Error finding rev file", err)
-			return ""
-		}
-	}
-	
-	return string(data)
-}
-
 func spoolCmd(bucket *s3.Bucket, fileName string) {
 	revisionId, err := buildRevisionId(fileName)
 	if err != nil {
@@ -151,55 +92,30 @@ func spoolCmd(bucket *s3.Bucket, fileName string) {
 
 }
 
-func downloadPackageRevision(bucket *s3.Bucket, pkg *PackageRepository, revisionName string) {
-	fmt.Println("Download", revisionName)
-	
-	listResp, err := bucket.List(revisionName + ".", ".", "", 1000)
+func downloadPackageRevision(remote *ftl.RemoteRepository, pkg *ftl.PackageRepository, revisionName string) {
+	r, err := remote.GetRevisionReader(pkg.Name, revisionName)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return 
 	}
+	defer r.Close()
 	
-	//fmt.Println(listResp)
-	
-	for _, prefix := range listResp.Contents {
-		fmt.Println("Found", prefix.Key)
-		r, err := bucket.GetReader(prefix.Key)
-		if err != nil {
-			fmt.Println("Error opening", prefix.Key, err)
-			continue
-		}
-		defer r.Close()
-		
-		pkg.Add(prefix.Key, r)
-
-		/*
-		w, err := os.Create(packagePath + "/" + prefix.Key)
-		if err != nil {
-			fmt.Println("Failed to create", packagePath + "/" + prefix.Key, err)
-			continue
-		}
-		defer w.Close()
-		
-		_, err = io.Copy(w, r)
-		if err != nil {
-			fmt.Println("Failed to copy", err)
-			continue
-		}
-		*/
+	err = pkg.Add(revisionName, r)
+	if err != nil {
+		fmt.Println("Failed listing", err)
+		return 
 	}
-
 }
 
-func removePackageRevision(pkg *PackageRepository, revisionName string) {
+func removePackageRevision(pkg *ftl.PackageRepository, revisionName string) {
 	fmt.Println("Remove", revisionName)
 	_ = pkg.Remove(revisionName)
 }
 
-func syncPackage(bucket *s3.Bucket, pkg *PackageRepository) {
+func syncPackage(remote *ftl.RemoteRepository, pkg *ftl.PackageRepository) {
 	fmt.Println("Syncing", pkg.Name, "to path", pkg.BasePath)
 	
-	remoteRevisions := listPackageRevisions(bucket, pkg.Name)
+	remoteRevisions := remote.ListRevisions(pkg.Name)
 	localRevisions := pkg.List()
 	
 	fmt.Println("Found", len(remoteRevisions), "remote and", len(localRevisions), "local")
@@ -221,7 +137,7 @@ func syncPackage(bucket *s3.Bucket, pkg *PackageRepository) {
 			done = true
 		case localNdx >= len(localRevisions):
 			// We have more remote revisions than local, just download what's left
-			downloadPackageRevision(bucket, pkg, remoteRevisions[remoteNdx])
+			downloadPackageRevision(remote, pkg, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
 			// We have an extra local revision, remove it
@@ -229,7 +145,7 @@ func syncPackage(bucket *s3.Bucket, pkg *PackageRepository) {
 			localNdx++
 		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
 			// We have a new remote revision, download it
-			downloadPackageRevision(bucket, pkg, remoteRevisions[remoteNdx])
+			downloadPackageRevision(remote, pkg, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] == localRevisions[localNdx]:
 			remoteNdx++
@@ -239,7 +155,7 @@ func syncPackage(bucket *s3.Bucket, pkg *PackageRepository) {
 	
 }
 
-func syncCmd(bucket *s3.Bucket, ftlRoot string) {
+func syncCmd(remote *ftl.RemoteRepository, ftlRoot string) {
 	rootFile, err := os.Open(ftlRoot)
 	if err != nil {
 		fmt.Println("Failed to open root", ftlRoot, err)
@@ -258,8 +174,8 @@ func syncCmd(bucket *s3.Bucket, ftlRoot string) {
 	
 	for _, file := range dirContents {
 		if file.IsDir() {
-			pkg := PackageRepository{ftlRoot, file.Name()}
-			syncPackage(bucket, &pkg)
+			pkg := ftl.PackageRepository{ftlRoot, file.Name()}
+			syncPackage(remote, &pkg)
 		}
 	}
 	
@@ -278,26 +194,10 @@ func jumpCmd(bucket *s3.Bucket, revName string) {
 	}
 }
 
-func listPackageRevisions(bucket *s3.Bucket, packageName string) (revisionList []string) {
-	revisionList = make([]string, 1000)[0:0]
-	listResp, err := bucket.List(packageName + ".", ".", "", 1000)
-	if err != nil {
-		fmt.Println("Failed listing", err)
-		return 
-	}
+func listCmd(rr *ftl.RemoteRepository, packageName string) {
+	activeRev := rr.GetBlessedRevision(packageName)
 	
-	for _, prefix := range listResp.CommonPrefixes {
-		revisionName := prefix[:len(prefix)-1]
-		revisionList = append(revisionList, revisionName)
-	}
-	
-	return
-}
-
-func listCmd(bucket *s3.Bucket, packageName string) {
-	activeRev := blessedRevision(bucket, packageName)
-	
-	for _, revisionName := range listPackageRevisions(bucket, packageName) {
+	for _, revisionName := range rr.ListRevisions(packageName) {
 		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
 			fmt.Printf("%s\t(active)\n", revisionName)
 		} else {
@@ -306,15 +206,9 @@ func listCmd(bucket *s3.Bucket, packageName string) {
 	}
 }
 
-func listPackagesCmd(bucket *s3.Bucket) {
-	listResp, err := bucket.List("", ".", "", 1000)
-	if err != nil {
-		fmt.Println("Failed listing", err)
-		return
-	}
-	
-	for _, prefix := range listResp.CommonPrefixes {
-		fmt.Println(prefix[:len(prefix)-1])
+func listPackagesCmd(remote *ftl.RemoteRepository) {
+	for _, revision := range remote.ListPackages() {
+		fmt.Println(revision)
 	}
 }
 
@@ -339,6 +233,9 @@ func main() {
     if err != nil {
 		optFail(fmt.Sprintf("AWS error: %s", err))
     }
+	
+	remote := ftl.NewRemoteRepository("ftl-rhettg", auth, aws.USEast)
+	_ = remote
 	
 	myS3 := s3.New(auth, aws.USEast)
 	
@@ -368,12 +265,12 @@ func main() {
 				}
 			case "list":
 				if (len(goopt.Args) > 1) {
-						listCmd(bucket, strings.TrimSpace(goopt.Args[1]))
+						listCmd(remote, strings.TrimSpace(goopt.Args[1]))
 					} else {
-						listPackagesCmd(bucket)
+						listPackagesCmd(remote)
 					}
 			case "sync":
-				syncCmd(bucket, ftlRoot)
+				syncCmd(remote, ftlRoot)
 			default:
 				optFail(fmt.Sprintf("Invalid command: %s", cmd))
 		}
