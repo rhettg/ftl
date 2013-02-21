@@ -21,19 +21,19 @@ Simple Example Usage
 ----
 
 Create the new revision
-	
+
     $ tar -czf my_site.tgz src/*
-	$ ftl spool my_site.tgz
-	my_site.054aR4G0L
+    $ ftl spool my_site.tgz
+    my_site.054aR4G0L
 
 Use SSH to kick all your servers to get the new revision
 
-	$ <ssh all> ftl sync
+    $ <ssh all> ftl sync
 
 Activate the new revision
 
-	$ <ssh all> ftl jump my_site.054aR4G0L
-	$ ftl jump --master my_site.054aR4G0L
+    $ <ssh all> ftl jump my_site.054aR4G0L
+    $ ftl jump --master my_site.054aR4G0L
 
 
 Commands
@@ -51,7 +51,12 @@ Commands
 Installation and Setup
 -----
 
-FTL has no config files. It's entirely environment variable based, though even that should be pretty minimal.
+Standard GO application installation:
+
+    $ go get github.com/rhettg/ftl
+    $ go install github.com/rhettg/ftl/main.go
+
+FTL has no config files. It's entirely environment variable based.
 
 You'll need on each machine whenever FTL is run:
 
@@ -63,7 +68,8 @@ system should care about. So if you have a package amed `my_site`, your
 deployment directory might look like:
 
     /var/opt/deploy/
-	    my_site/
+        my_site/
+           .. empty ..
 
 Your current version of the package will be accesssed as:
 
@@ -71,10 +77,11 @@ Your current version of the package will be accesssed as:
 
 And then similiar to command line EC2 tools, you need your credentials:
 
-	AWS_SECRET_ACCESS_KEY=<secret>
-	AWS_ACCESS_KEY_ID=<key>
+    AWS_SECRET_ACCESS_KEY=<secret>
+    AWS_ACCESS_KEY_ID=<key>
 
 You'll likely want to setup `ftl sync` to be run via cron or at system startup to ensure your packages are up to date.
+
 
 Deployment Package
 -----
@@ -106,14 +113,14 @@ Deploy Directory Layout
                         pre-jump.sh   # Script to be executed before bless
                         post-jump.sh  # Script executed after bless
                         un-jump.sh    # Script executed before un-blessing
-						....          # More package data
+                        ....          # More package data
               current/                # Symlink to current revision
               .lock                   # Lock file to syncronize processes (cron vs. manual)
 
 S3 Layout
 -----
-	<package_name>.fhsdjf.tar.gz   # Specific revision
-	<package_name>.rev             # Active revision name 
+    <package_name>.fhsdjf.tar.gz   # Specific revision
+    <package_name>.rev             # Active revision name 
 
 
 Todo
