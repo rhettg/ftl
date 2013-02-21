@@ -197,8 +197,13 @@ func main() {
 	if err != nil {
 		optFail(fmt.Sprintf("AWS error: %s", err))
 	}
+	
+	ftlBucketEnv := os.Getenv("FTL_BUCKET")
+	if len(ftlBucketEnv) == 0 {
+		optFail(fmt.Sprintf("FTL_BUCKET not set"))
+	}
 
-	remote := ftl.NewRemoteRepository("ftl-rhettg", auth, aws.USEast)
+	remote := ftl.NewRemoteRepository(ftlBucketEnv, auth, aws.USEast)
 	local := ftl.NewLocalRepository(ftlRoot)
 
 	if len(goopt.Args) > 0 {
