@@ -57,7 +57,7 @@ func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepos
 
 	err = local.Add(revisionName, fileName, r)
 	if err != nil {
-		fmt.Println("Failed listing", err)
+		fmt.Println("Failed adding", revisionName, err)
 		return
 	}
 }
@@ -77,7 +77,7 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 	remoteRevisions := remote.ListRevisions(packageName)
 	localRevisions := local.ListRevisions(packageName)
 
-	fmt.Println("Found", len(remoteRevisions), "remote and", len(localRevisions), "local")
+	//fmt.Println("Found", len(remoteRevisions), "remote and", len(localRevisions), "local")
 
 	remoteNdx, localNdx := 0, 0
 	for done := false; !done; {
@@ -122,7 +122,10 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
 	}
 
 	for _, packageName := range local.ListPackages() {
+		activeRev := remote.GetActiveRevision(packageName)
+		if len(activeRev) > 0 {
 		local.Jump(remote.GetActiveRevision(packageName))
+		}
 	}
 }
 
