@@ -107,11 +107,10 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionNa
 
 	revisionName = fmt.Sprintf("%s.%s", packageName, revisionId)
 
-	parts := strings.Split(statInfo.Name(), ".")
-	nameBase := parts[0]
-	ext := parts[1]
+	fileName := statInfo.Name()
+	nameBase := fileName[:strings.Index(fileName, ".")]
 
-	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, ext)
+	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, fileName[strings.Index(fileName, ".") + 1:])
 	rr.bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
 	return
 }
