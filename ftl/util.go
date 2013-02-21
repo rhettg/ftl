@@ -11,11 +11,10 @@ func encodeBytes(b []byte) (s string) {
 
 type RevisionInfo struct {
 	PackageName string
-	Revision string
+	Revision    string
 }
 
 func NewRevisionInfo(revisionName string) *RevisionInfo {
 	parts := strings.Split(revisionName, ".")
 	return &RevisionInfo{parts[0], parts[1]}
 }
-

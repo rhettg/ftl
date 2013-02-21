@@ -10,25 +10,24 @@ import "encoding/binary"
 import "launchpad.net/goamz/s3"
 import "launchpad.net/goamz/aws"
 
-
 func buildRevisionId(file *os.File) (revisionId string, err error) {
 	// Revsion id will be based on a combination of encoding timestamp and sha1 of the file.
-	
+
 	defer file.Seek(0, 0)
-	
+
 	h := md5.New()
-	
+
 	_, err = io.Copy(h, file)
 	if err != nil {
 		fmt.Println("Error copying file", err)
 		return
 	}
 	hashEncode := encodeBytes(h.Sum(nil))
-	
+
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(time.Now().Unix()))
 	timeStampEncode := encodeBytes(buf)
-	
+
 	// We're using pieces of our encoding data:
 	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)
 	//  * For our hash, we're only using 2 bytes
@@ -48,30 +47,30 @@ func NewRemoteRepository(name string, auth aws.Auth, region aws.Region) (remote 
 
 func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []string) {
 	revisionList = make([]string, 0, 1000)
-	
-	listResp, err := rr.bucket.List(packageName + ".", ".", "", 1000)
+
+	listResp, err := rr.bucket.List(packageName+".", ".", "", 1000)
 	if err != nil {
 		fmt.Println("Failed listing", err)
-		return 
+		return
 	}
-	
+
 	for _, prefix := range listResp.CommonPrefixes {
 		revisionName := prefix[:len(prefix)-1]
 		revisionList = append(revisionList, revisionName)
 	}
-	
+
 	return
 }
 
 func (rr *RemoteRepository) ListPackages() (pkgs []string) {
 	pkgs = make([]string, 0, 1000)
-	
+
 	listResp, err := rr.bucket.List("", ".", "", 1000)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return
 	}
-	
+
 	for _, prefix := range listResp.CommonPrefixes {
 		pkgs = append(pkgs, prefix[:len(prefix)-1])
 	}
@@ -84,12 +83,12 @@ func (rr *RemoteRepository) GetRevisionReader(revisionName string) (fileName str
 		fmt.Println("Failed listing", err)
 		return
 	}
-	
+
 	if len(listResp.Contents) > 0 {
 		fileName = listResp.Contents[0].Key
 		reader, err = rr.bucket.GetReader(fileName)
 	}
-	
+
 	return
 }
 
@@ -105,13 +104,13 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionNa
 		fmt.Println("Failed to build revision id")
 		return
 	}
-	
+
 	revisionName = fmt.Sprintf("%s.%s", packageName, revisionId)
-	
+
 	parts := strings.Split(statInfo.Name(), ".")
 	nameBase := parts[0]
 	ext := parts[1]
-	
+
 	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, ext)
 	rr.bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
 	return
@@ -124,7 +123,7 @@ func (rr *RemoteRepository) activeRevisionFilePath(packageName string) (revision
 
 func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName string) {
 	revFile := rr.activeRevisionFilePath(packageName)
-	
+
 	data, err := rr.bucket.Get(revFile)
 	if err != nil {
 		s3Error, _ := err.(*s3.Error)
@@ -135,16 +134,15 @@ func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName 
 			return
 		}
 	}
-	
+
 	revisionName = string(data)
 	return
 }
 
-	
 func (rr *RemoteRepository) Jump(packageName, revisionName string) (err error) {
 	// TODO: Verify revision?
 	activeFile := rr.activeRevisionFilePath(packageName)
-	
+
 	err = rr.bucket.Put(activeFile, []byte(revisionName), "text/plain", s3.Private)
 	if err != nil {
 		fmt.Printf("Failed to put rev file", err)
