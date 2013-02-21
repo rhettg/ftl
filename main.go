@@ -67,8 +67,6 @@ func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
 }
 
 func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) {
-	fmt.Println("Syncing", packageName, "to path", local.BasePath)
-	
 	err := local.CheckPackage(packageName)
 	if err != nil {
 		fmt.Println("Package initialize failed", err)
@@ -82,12 +80,14 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 	
 	remoteNdx, localNdx := 0, 0
 	for done := false; !done; {
+		/*
 		if remoteNdx < len(remoteRevisions) {
 			fmt.Println("Remote", remoteRevisions[remoteNdx])
 		}
 		if localNdx < len(localRevisions) {
 			fmt.Println("Local", localRevisions[localNdx])
 		}
+		*/
 		
 		switch {
 		case remoteNdx >= len(remoteRevisions) && localNdx >= len(localRevisions):
@@ -120,7 +120,9 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
 		syncPackage(remote, local, packageName)
 	}
 	
-	// TODO: and then jump
+	for _, packageName := range local.ListPackages() {
+		local.Jump(remote.GetActiveRevision(packageName))
+	}
 }
 
 func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) {

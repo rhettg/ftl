@@ -133,7 +133,19 @@ func (lr *LocalRepository) Remove(name string) (err error)  {
 func (lr *LocalRepository) Jump(name string) (err error)  {
 	revInfo := NewRevisionInfo(name)
 	
+	if lr.GetActiveRevision(revInfo.PackageName) == name {
+		// Already active
+		return
+	}
+	
 	revFileName := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
+	_, err = os.Stat(revFileName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Revision doesn't exist")
+			return
+		}
+	}
 	
 	activeFileName := lr.activeRevisionFilePath(revInfo.PackageName)
 	
