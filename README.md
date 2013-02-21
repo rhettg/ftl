@@ -7,15 +7,16 @@ Overview
 -----
 The most naive and bare-bones of deployment systems is to use SSH to copy files
 around to multiple nodes. This can be easily implemented in something like
-'Fabric's is to use SSH to copy files around to multiple nodes. This can be
-easily implemented in something like 'Fabric'. This is 'push' based deployment system.
+'Fabric'. You could call this a 'push' based deployment system.
 
-The biggest issue with this system is dealing with systems that may not be
+The biggest issue with this style is dealing with systems that may not be
 running when the deployment takes place. You have to start the system, then do
 a deployment to get the software on the new machine.
 
 FTL provides a deployment system that isn't much more complex than a simple
-push model, but uses S3 to get the characteristics of a pull system.
+push model, but uses S3 to get the characteristics of a pull system. FTL also
+provides a reasonable amount of framework for switching between revisions of
+your software and automating installation and setup of your software.
 
 Simple Example Usage
 ----
@@ -46,6 +47,8 @@ Commands
     ftl sync                           # Check S3 for new stuff to do (new revisions, remove revisions, bless)
     ftl jump <rev name>                # Bless the specified revision
     ftl jump --master <rev name>       # Mark the revision blessed in S3 (only needs to be done by one node)
+    ftl remove --master <rev name>     # Remove the specified revision.
+    ftl clean --master <package name>  # Clean up older revisions
 
 
 Installation and Setup
@@ -128,5 +131,5 @@ Todo
 
   1. Package scripts (pre/post etc)
   1. Fixup logging
-  1. Remove older revisions
+  1. Remove older revisions (commands 'remove' and 'clean')
 
