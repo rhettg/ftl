@@ -2,6 +2,7 @@ package ftl
 
 import "fmt"
 import "os"
+import "os/exec"
 import "strings"
 import "syscall"
 import "errors"
@@ -103,6 +104,7 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 	revisionName := parts[1]
 
 	revisionPath := filepath.Join(lr.BasePath, packageName, "revs", revisionName)
+	fmt.Println("Adding", revisionPath)
 
 	err = os.Mkdir(revisionPath, 0755)
 	if err != nil {
@@ -120,6 +122,36 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 	_, err = io.Copy(w, r)
 	if err != nil {
 		return
+	}
+	
+	w.Close()
+	
+	// TODO: Check MD5 suffix
+	
+	if strings.HasSuffix(fileName, ".tgz") || strings.HasSuffix(fileName, ".gz") {
+		cmd := exec.Command("gunzip", revisionFilePath)
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println("Failed to unzip", err)
+			return
+		}
+	}
+	
+	revisionFilePrefix := filepath.Join(revisionPath, name)
+	
+	_, err = os.Stat(revisionFilePrefix + ".tar")
+	if err == nil {
+		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix + ".tar")
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println("Failed to untar", err)
+			return
+		}
+		err = os.Remove(revisionFilePrefix + ".tar")
+		if err != nil {
+			fmt.Println("Failed to cleanup", err)
+			return
+		}
 	}
 
 	return
