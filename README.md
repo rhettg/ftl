@@ -9,7 +9,7 @@ The most naive and bare-bones of deployment systems is to use SSH to copy files
 around to multiple nodes. This can be easily implemented in something like
 'Fabric'. You could call this a 'push' based deployment system.
 
-The biggest issue with this style is dealing with systems that may not be
+A big issue with this style is dealing with systems that may not be
 running when the deployment takes place. You have to start the system, then do
 a deployment to get the software on the new machine.
 
@@ -78,10 +78,16 @@ Your current version of the package will be accesssed as:
 
     /var/opt/deploy/my_site/current/<file name>
 
-And then similiar to command line EC2 tools, you need your credentials:
+FTL needs access to whatever S3 Bucket you have chosen. How you do this may depend on your security requirements.
+
+The recommended setup is:
+  * On your deployment machine, include environment variables similiar to command line EC2 tools:
 
     AWS_SECRET_ACCESS_KEY=<secret>
     AWS_ACCESS_KEY_ID=<key>
+
+  * On target systems, set no credentials but rather configure your S3 bucket to allow read access from your IP address(s). 
+    This is easy to do in VPC based systems where you control your own routing.
 
 You'll likely want to setup `ftl sync` to be run via cron or at system startup to ensure your packages are up to date.
 
@@ -130,6 +136,7 @@ Todo
 ------
 
   1. Package scripts (pre/post etc)
+  1. Test AWS configurations
   1. Fixup logging
   1. Remove older revisions (commands 'remove' and 'clean')
 
