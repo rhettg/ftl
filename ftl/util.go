@@ -2,6 +2,7 @@ package ftl
 
 import "encoding/base64"
 import "strings"
+import "fmt"
 
 func encodeBytes(b []byte) (s string) {
 	enc := base64.NewEncoding("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~")
@@ -16,5 +17,10 @@ type RevisionInfo struct {
 
 func NewRevisionInfo(revisionName string) *RevisionInfo {
 	parts := strings.Split(revisionName, ".")
+	if len(parts) < 2 {
+		fmt.Println("Failed to parse revision", revisionName)
+		return nil
+	}
+	
 	return &RevisionInfo{parts[0], parts[1]}
 }
