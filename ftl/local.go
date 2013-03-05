@@ -9,6 +9,14 @@ import "errors"
 import "io"
 import "path/filepath"
 
+const (
+	PKG_SCRIPT_POST_SYNC = "post-sync.sh"
+	PKG_SCRIPT_PRE_JUMP = "pre-jump.sh"
+	PKG_SCRIPT_POST_JUMP = "post-jump.sh"
+	PKG_SCRIPT_UN_JUMP = "un_jump.sh"
+	PKG_SCRIPT_CLEAN = "clean.sh"
+)
+
 type LocalRepository struct {
 	BasePath string
 }
@@ -178,11 +186,22 @@ func (lr *LocalRepository) Jump(name string) (err error) {
 			return
 		}
 	}
-
-	activeFileName := lr.activeRevisionFilePath(revInfo.PackageName)
+	
+	err = lr.RunPackageScript(name, PKG_SCRIPT_PRE_JUMP)
+	if err != nil {
+		return
+	}
+	
+	
+	activeRevision := lr.GetActiveRevision(revInfo.PackageName)
+	err = lr.RunPackageScript(activeRevision, PKG_SCRIPT_UN_JUMP)
+	if err != nil {
+		return
+	}
 
 	// We have to, maybe, remove the older revision link first.	
 	// Note that this isn't atomic, but neither is the ln command
+	activeFileName := lr.activeRevisionFilePath(revInfo.PackageName)
 	err = os.Remove(activeFileName)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -194,6 +213,11 @@ func (lr *LocalRepository) Jump(name string) (err error) {
 	err = os.Symlink(revFileName, activeFileName)
 	if err != nil {
 		fmt.Println("Failed creating symlink", err)
+	}
+
+	err = lr.RunPackageScript(name, PKG_SCRIPT_POST_JUMP)
+	if err != nil {
+		return
 	}
 
 	return
@@ -236,5 +260,23 @@ func (lr *LocalRepository) CheckPackage(packageName string) (err error) {
 		}
 	}
 
+	return
+}
+
+func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (err error) {
+	revInfo := NewRevisionInfo(revisionName)
+	scriptPath := filepath.Join(lr.BasePath, revInfo.PackageName, revInfo.Revision, scriptName)
+		
+	_, err = os.Stat(scriptPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// That's fine, script isn't required.
+			err = nil
+		}
+		return
+	}
+	
+	cmd := exec.Command(scriptPath)
+	err = cmd.Run()
 	return
 }

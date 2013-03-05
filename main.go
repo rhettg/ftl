@@ -124,7 +124,11 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
 	for _, packageName := range local.ListPackages() {
 		activeRev := remote.GetActiveRevision(packageName)
 		if len(activeRev) > 0 {
-			local.Jump(remote.GetActiveRevision(packageName))
+			err := local.Jump(remote.GetActiveRevision(packageName))
+			// TODO: Return error
+			if err != nil {
+				fmt.Println("Failed to activate", packageName, err)
+			}
 		}
 	}
 }
@@ -137,7 +141,10 @@ func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) {
 }
 
 func jumpCmd(lr *ftl.LocalRepository, revName string) {
-	lr.Jump(revName)
+	err := lr.Jump(revName)
+	if err != nil {
+		fmt.Println("Failed to activate", revName, err)
+	}
 }
 
 func listCmd(lr *ftl.LocalRepository, packageName string) {
