@@ -13,7 +13,7 @@ const (
 	PKG_SCRIPT_POST_SYNC = "post-sync.sh"
 	PKG_SCRIPT_PRE_JUMP = "pre-jump.sh"
 	PKG_SCRIPT_POST_JUMP = "post-jump.sh"
-	PKG_SCRIPT_UN_JUMP = "un_jump.sh"
+	PKG_SCRIPT_UN_JUMP = "un-jump.sh"
 	PKG_SCRIPT_CLEAN = "clean.sh"
 )
 
@@ -194,9 +194,11 @@ func (lr *LocalRepository) Jump(name string) (err error) {
 	
 	
 	activeRevision := lr.GetActiveRevision(revInfo.PackageName)
+	if len(activeRevision) > 0 {
 	err = lr.RunPackageScript(activeRevision, PKG_SCRIPT_UN_JUMP)
 	if err != nil {
 		return
+	}
 	}
 
 	// We have to, maybe, remove the older revision link first.	
@@ -265,8 +267,8 @@ func (lr *LocalRepository) CheckPackage(packageName string) (err error) {
 
 func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (err error) {
 	revInfo := NewRevisionInfo(revisionName)
-	scriptPath := filepath.Join(lr.BasePath, revInfo.PackageName, revInfo.Revision, scriptName)
-		
+	scriptPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision, scriptName)
+	
 	_, err = os.Stat(scriptPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -277,6 +279,8 @@ func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (er
 	}
 	
 	cmd := exec.Command(scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	return
 }
