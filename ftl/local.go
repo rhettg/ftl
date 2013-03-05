@@ -123,11 +123,11 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 	if err != nil {
 		return
 	}
-	
+
 	w.Close()
-	
+
 	// TODO: Check MD5 suffix
-	
+
 	if strings.HasSuffix(fileName, ".tgz") || strings.HasSuffix(fileName, ".gz") {
 		cmd := exec.Command("gunzip", revisionFilePath)
 		err = cmd.Run()
@@ -136,12 +136,12 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 			return
 		}
 	}
-	
+
 	revisionFilePrefix := filepath.Join(revisionPath, name)
-	
+
 	_, err = os.Stat(revisionFilePrefix + ".tar")
 	if err == nil {
-		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix + ".tar")
+		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix+".tar")
 		err = cmd.Run()
 		if err != nil {
 			fmt.Println("Failed to untar", err)

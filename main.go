@@ -124,7 +124,7 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
 	for _, packageName := range local.ListPackages() {
 		activeRev := remote.GetActiveRevision(packageName)
 		if len(activeRev) > 0 {
-		local.Jump(remote.GetActiveRevision(packageName))
+			local.Jump(remote.GetActiveRevision(packageName))
 		}
 	}
 }
@@ -197,7 +197,7 @@ func main() {
 	if err != nil {
 		optFail(fmt.Sprintf("AWS error: %s", err))
 	}
-	
+
 	ftlBucketEnv := os.Getenv("FTL_BUCKET")
 	if len(ftlBucketEnv) == 0 {
 		optFail(fmt.Sprintf("FTL_BUCKET not set"))
