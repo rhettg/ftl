@@ -21,6 +21,17 @@ type LocalRepository struct {
 	BasePath string
 }
 
+type PackageScriptError struct {
+	WaitStatus syscall.WaitStatus
+	Script string
+	Revision string
+}
+
+func (e *PackageScriptError) Error() string {
+	return fmt.Sprintf("Package script %s:%s exited %d", e.Revision, e.Script, e.WaitStatus.ExitStatus())
+}
+
+
 func NewLocalRepository(basePath string) (lr *LocalRepository) {
 	return &LocalRepository{basePath}
 }
@@ -161,6 +172,11 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 			return
 		}
 	}
+	
+	err = lr.RunPackageScript(name, PKG_SCRIPT_POST_SYNC)
+	if err != nil {
+		return
+	}
 
 	return
 }
@@ -282,5 +298,10 @@ func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (er
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok {
+		if s, ok := e.Sys().(syscall.WaitStatus); ok {
+			err = &PackageScriptError{s, scriptName, revisionName}
+		}
+	}
 	return
 }

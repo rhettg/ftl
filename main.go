@@ -21,7 +21,7 @@ func optFail(message string) {
 	os.Exit(1)
 }
 
-func spoolCmd(rr *ftl.RemoteRepository, fileName string) {
+func spoolCmd(rr *ftl.RemoteRepository, fileName string) (err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		fmt.Println("Error opening file", err)
@@ -41,9 +41,10 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) {
 	}
 
 	fmt.Println(revisionName)
+	return
 }
 
-func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) {
+func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) (err error) {
 	//packageName := ftl.NewRevisionInfo(revisionName).PackageName
 
 	fileName, r, err := remote.GetRevisionReader(revisionName)
@@ -60,6 +61,7 @@ func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepos
 		fmt.Println("Failed adding", revisionName, err)
 		return
 	}
+	return
 }
 
 func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
@@ -67,8 +69,8 @@ func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
 	_ = local.Remove(revisionName)
 }
 
-func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) {
-	err := local.CheckPackage(packageName)
+func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error){
+	err = local.CheckPackage(packageName)
 	if err != nil {
 		fmt.Println("Package initialize failed", err)
 		return
@@ -98,7 +100,7 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 			done = true
 		case localNdx >= len(localRevisions):
 			// We have more remote revisions than local, just download what's left
-			downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
+			err = downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
 			// We have an extra local revision, remove it
@@ -106,31 +108,36 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 			localNdx++
 		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
 			// We have a new remote revision, download it
-			downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
+			err = downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] == localRevisions[localNdx]:
 			remoteNdx++
 			localNdx++
 		}
 	}
-
+	
+	return
 }
 
-func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) {
+func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) (err error) {
 	for _, packageName := range local.ListPackages() {
-		syncPackage(remote, local, packageName)
+		err = syncPackage(remote, local, packageName)
+		if err != nil {
+			return
+		}
 	}
-
+	
 	for _, packageName := range local.ListPackages() {
 		activeRev := remote.GetActiveRevision(packageName)
 		if len(activeRev) > 0 {
-			err := local.Jump(remote.GetActiveRevision(packageName))
-			// TODO: Return error
+			err = local.Jump(remote.GetActiveRevision(packageName))
 			if err != nil {
-				fmt.Println("Failed to activate", packageName, err)
+				fmt.Println(err)
+				return
 			}
 		}
 	}
+	return
 }
 
 func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) {
@@ -140,11 +147,12 @@ func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) {
 	remote.Jump(packageName, revName)
 }
 
-func jumpCmd(lr *ftl.LocalRepository, revName string) {
-	err := lr.Jump(revName)
+func jumpCmd(lr *ftl.LocalRepository, revName string) (err error) {
+	err = lr.Jump(revName)
 	if err != nil {
 		fmt.Println("Failed to activate", revName, err)
 	}
+	return
 }
 
 func listCmd(lr *ftl.LocalRepository, packageName string) {
@@ -235,7 +243,7 @@ func main() {
 				if *amMaster {
 					jumpRemoteCmd(remote, revName)
 				} else {
-					jumpCmd(local, revName)
+					err = jumpCmd(local, revName)
 				}
 			} else {
 				optFail("Jump where?")
@@ -255,11 +263,19 @@ func main() {
 				}
 			}
 		case "sync":
-			syncCmd(remote, local)
+			err = syncCmd(remote, local)
 		default:
 			optFail(fmt.Sprintf("Invalid command: %s", cmd))
 		}
 	} else {
 		optFail("Nothing to do")
+	}
+	
+	if err != nil {
+		if pse, ok := err.(*ftl.PackageScriptError); ok {
+			os.Exit(pse.WaitStatus.ExitStatus())
+		} else {
+			os.Exit(1)
+		}
 	}
 }
