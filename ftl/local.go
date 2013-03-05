@@ -10,11 +10,11 @@ import "io"
 import "path/filepath"
 
 const (
-	PKG_SCRIPT_POST_SYNC = "post-sync.sh"
-	PKG_SCRIPT_PRE_JUMP = "pre-jump.sh"
-	PKG_SCRIPT_POST_JUMP = "post-jump.sh"
-	PKG_SCRIPT_UN_JUMP = "un-jump.sh"
-	PKG_SCRIPT_CLEAN = "clean.sh"
+	PKG_SCRIPT_POST_SYNC = "post-spool"
+	PKG_SCRIPT_PRE_JUMP = "pre-jump"
+	PKG_SCRIPT_POST_JUMP = "post-jump"
+	PKG_SCRIPT_UN_JUMP = "un-jump"
+	PKG_SCRIPT_CLEAN = "clean"
 )
 
 type LocalRepository struct {
@@ -283,7 +283,7 @@ func (lr *LocalRepository) CheckPackage(packageName string) (err error) {
 
 func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (err error) {
 	revInfo := NewRevisionInfo(revisionName)
-	scriptPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision, scriptName)
+	scriptPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision, "ftl", scriptName)
 	
 	_, err = os.Stat(scriptPath)
 	if err != nil {

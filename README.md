@@ -115,16 +115,16 @@ any script exits with an error, the FTL command will always exit with an error.
 Deploy Directory Layout
 ----
 
+    .lock                                # Lock file to syncronize processes (cron vs. manual)
     <project>/
+              current/                   # Symlink to current revision
               revs/
-                   a93jfhsdjf/        # Specific revision
-                        post-sync.sh  # Script to be executed after download
-                        pre-jump.sh   # Script to be executed before bless
-                        post-jump.sh  # Script executed after bless
-                        un-jump.sh    # Script executed before un-blessing
-                        ....          # More package data
-              current/                # Symlink to current revision
-              .lock                   # Lock file to syncronize processes (cron vs. manual)
+                   201303057568Wq/       # Specific revision
+                        ftl/post-spool   # Script to be executed after download
+                        ftl/pre-jump     # Script to be executed before bless
+                        ftl/post-jump    # Script executed after bless
+                        ftl/un-jump      # Script executed before un-blessing
+                        ....             # More package data
 
 S3 Layout
 -----
@@ -135,8 +135,10 @@ S3 Layout
 Todo
 ------
 
-  1. Package scripts (pre/post etc)
   1. Test AWS configurations
+  1. Environment variables for package scripts
   1. Fixup logging
+  1. Output capture and annotate rather than echo for package scripts
   1. Remove older revisions (commands 'remove' and 'clean')
+  1. Parallelize sync operations
 
