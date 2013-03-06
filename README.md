@@ -78,19 +78,25 @@ Your current version of the package will be accesssed as:
 
     /var/opt/deploy/my_site/current/<file name>
 
-FTL needs access to whatever S3 Bucket you have chosen. How you do this may depend on your security requirements.
-
-The recommended setup is:
-  * On your deployment machine, include environment variables similiar to command line EC2 tools:
+FTL needs access to whatever S3 Bucket you have chosen. Similiar to command line AWS/S3/EC2 tools, 
+FTL needs access to environment variables that provide credentials.
 
     AWS_SECRET_ACCESS_KEY=<secret>
     AWS_ACCESS_KEY_ID=<key>
 
-  * On target systems, set no credentials but rather configure your S3 bucket to allow read access from your IP address(s). 
-    This is easy to do in VPC based systems where you control your own routing.
+This is easy to do for your deployment system, as you can just add them to your
+`.profile` or similiar. For production machines, it can be more complicated.  A
+system we've found to work well is to have a set of separate set of keys for
+your deployed systems, stored in flat files with permissions just for your
+deploy user (or perhaps application).
 
-You'll likely want to setup `ftl sync` to be run via cron or at system startup to ensure your packages are up to date.
+Then create a file like `/etc/profile.d/aws.sh` with the contents:
 
+    AWS_SECRET_ACCESS_KEY=`cat /etc/aws.secret`
+    AWS_ACCESS_KEY_ID=`cat /etc/aws.key`
+	
+Keep in mind that you'll need to be executing `ftl` from within a normal bash
+environment. If using `sudo`, you might find `sudo -E` to be useful.
 
 Deployment Package
 -----
@@ -135,7 +141,6 @@ S3 Layout
 Todo
 ------
 
-  1. Test AWS configurations
   1. Environment variables for package scripts
   1. Fixup logging
   1. Output capture and annotate rather than echo for package scripts
