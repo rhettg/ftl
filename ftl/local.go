@@ -2,6 +2,7 @@ package ftl
 
 import "fmt"
 import "os"
+import "sort"
 import "os/exec"
 import "strings"
 import "syscall"
@@ -92,6 +93,8 @@ func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []s
 	for _, fileInfo := range localRevisionFiles {
 		localRevisions = append(localRevisions, strings.Join([]string{packageName, fileInfo.Name()}, "."))
 	}
+	
+	sort.Strings(localRevisions)
 	return
 }
 
