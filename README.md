@@ -145,5 +145,6 @@ Todo
   1. Fixup logging
   1. Output capture and annotate rather than echo for package scripts
   1. Remove older revisions (commands 'remove' and 'clean')
+  1. Lock file
   1. Parallelize sync operations
 
