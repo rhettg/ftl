@@ -195,7 +195,7 @@ func main() {
 	goopt.Description = func() string {
 		return "Faster Than Light Deploy System"
 	}
-	goopt.Version = "0.1"
+	goopt.Version = "0.2"
 	goopt.Summary = "Deploy system built around S3."
 	goopt.Parse(nil)
 

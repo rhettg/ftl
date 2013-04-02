@@ -285,9 +285,17 @@ func (lr *LocalRepository) CheckPackage(packageName string) (err error) {
 }
 
 func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (err error) {
+	cwd, _ := os.Getwd()
+	defer os.Chdir(cwd)
+
+
 	revInfo := NewRevisionInfo(revisionName)
-	scriptPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision, "ftl", scriptName)
+
+	revPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
+	scriptPath := filepath.Join(revPath, "ftl", scriptName)
 	
+	os.Chdir(revPath)
+
 	_, err = os.Stat(scriptPath)
 	if err != nil {
 		if os.IsNotExist(err) {
