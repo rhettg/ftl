@@ -1,17 +1,19 @@
 package ftl
 
-import "fmt"
-import "io"
-import "os"
-import "time"
-import "strings"
-import "crypto/md5"
-import "launchpad.net/goamz/s3"
-import "launchpad.net/goamz/aws"
+import (
+	"crypto/md5"
+	"fmt"
+	"io"
+	"launchpad.net/goamz/aws"
+	"launchpad.net/goamz/s3"
+	"os"
+	"strings"
+	"time"
+)
 
 func buildRevisionId(file *os.File) (revisionId string, err error) {
 	// Revsion id will be based on a combination of encoding timestamp and sha1 of the file.
-	
+
 	defer file.Seek(0, 0)
 
 	h := md5.New()
@@ -25,7 +27,7 @@ func buildRevisionId(file *os.File) (revisionId string, err error) {
 
 	now := time.Now().UTC()
 	hour, min, sec := now.Clock()
-	timeStamp := fmt.Sprintf("%s%d", now.Format("20060102"), hour * 60 *60 + min * 60 + sec)
+	timeStamp := fmt.Sprintf("%s%d", now.Format("20060102"), hour*60*60+min*60+sec)
 
 	// We're using pieces of our encoding data:
 	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)
