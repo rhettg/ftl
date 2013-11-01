@@ -11,7 +11,6 @@ import "launchpad.net/goamz/aws"
 
 func buildRevisionId(file *os.File) (revisionId string, err error) {
 	// Revsion id will be based on a combination of encoding timestamp and sha1 of the file.
-	
 	defer file.Seek(0, 0)
 
 	h := md5.New()

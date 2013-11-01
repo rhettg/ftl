@@ -15,6 +15,24 @@ var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 
 var amMaster = goopt.Flag([]string{"--master"}, nil, "Execute against master repository", "")
 
+var awsRegion = goopt.Alternatives([]string{"--region"},
+	[]string{"us-east", "us-west-1", "us-west-2"},
+	"S3 region")
+
+func optToRegion(regionName string) (region aws.Region) {
+	region = aws.USEast
+
+	switch regionName {
+	case "us-east":
+		region = aws.USEast
+	case "us-west-1":
+		region = aws.USWest
+	case "us-west-2":
+		region = aws.USWest2
+	}
+	return
+}
+
 func optFail(message string) {
 	fmt.Println(message)
 	fmt.Print(goopt.Help())
@@ -69,7 +87,7 @@ func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
 	_ = local.Remove(revisionName)
 }
 
-func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error){
+func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error) {
 	err = local.CheckPackage(packageName)
 	if err != nil {
 		fmt.Println("Package initialize failed", err)
@@ -115,7 +133,7 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 			localNdx++
 		}
 	}
-	
+
 	return
 }
 
@@ -126,7 +144,7 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) (err erro
 			return
 		}
 	}
-	
+
 	for _, packageName := range local.ListPackages() {
 		activeRev := remote.GetActiveRevision(packageName)
 		if len(activeRev) > 0 {
@@ -218,7 +236,7 @@ func main() {
 		optFail(fmt.Sprintf("FTL_BUCKET not set"))
 	}
 
-	remote := ftl.NewRemoteRepository(ftlBucketEnv, auth, aws.USEast)
+	remote := ftl.NewRemoteRepository(ftlBucketEnv, auth, optToRegion(os.Getenv("AWS_DEFAULT_REGION")))
 	local := ftl.NewLocalRepository(ftlRoot)
 
 	if len(goopt.Args) > 0 {
@@ -270,7 +288,7 @@ func main() {
 	} else {
 		optFail("Nothing to do")
 	}
-	
+
 	if err != nil {
 		if pse, ok := err.(*ftl.PackageScriptError); ok {
 			os.Exit(pse.WaitStatus.ExitStatus())
