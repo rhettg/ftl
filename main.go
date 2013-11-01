@@ -15,10 +15,6 @@ var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 
 var amMaster = goopt.Flag([]string{"--master"}, nil, "Execute against master repository", "")
 
-var awsRegion = goopt.Alternatives([]string{"--region"},
-	[]string{"us-east", "us-west-1", "us-west-2"},
-	"S3 region")
-
 func optToRegion(regionName string) (region aws.Region) {
 	region = aws.USEast
 
