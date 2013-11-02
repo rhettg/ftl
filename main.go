@@ -3,12 +3,13 @@ package main
 import "fmt"
 import "os"
 
-//import "path"
-import "path/filepath"
-import "strings"
-import goopt "github.com/droundy/goopt"
-import "launchpad.net/goamz/aws"
-import "github.com/rhettg/ftl/ftl"
+import (
+	goopt "github.com/droundy/goopt"
+	"github.com/rhettg/ftl/ftl"
+	"launchpad.net/goamz/aws"
+	"path/filepath"
+	"strings"
+)
 
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 	"output verbosely", "be quiet, instead")
@@ -69,7 +70,7 @@ func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
 	_ = local.Remove(revisionName)
 }
 
-func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error){
+func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error) {
 	err = local.CheckPackage(packageName)
 	if err != nil {
 		fmt.Println("Package initialize failed", err)
@@ -115,7 +116,7 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 			localNdx++
 		}
 	}
-	
+
 	return
 }
 
@@ -126,7 +127,7 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) (err erro
 			return
 		}
 	}
-	
+
 	for _, packageName := range local.ListPackages() {
 		activeRev := remote.GetActiveRevision(packageName)
 		if len(activeRev) > 0 {
@@ -270,7 +271,7 @@ func main() {
 	} else {
 		optFail("Nothing to do")
 	}
-	
+
 	if err != nil {
 		if pse, ok := err.(*ftl.PackageScriptError); ok {
 			os.Exit(pse.WaitStatus.ExitStatus())
