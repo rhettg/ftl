@@ -127,7 +127,10 @@ func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName 
 	data, err := rr.bucket.Get(revFile)
 	if err != nil {
 		s3Error, _ := err.(*s3.Error)
-		if s3Error.StatusCode == 404 {
+		if s3Error == nil {
+			fmt.Printf("Error retrieving revision, no error")
+			return
+		} else if s3Error.StatusCode == 404 {
 			return
 		} else {
 			fmt.Printf("Error finding rev file", err)

@@ -16,6 +16,20 @@ var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 
 var amMaster = goopt.Flag([]string{"--master"}, nil, "Execute against master repository", "")
 
+func optToRegion(regionName string) (region aws.Region) {
+	region = aws.USEast
+
+	switch regionName {
+	case "us-east":
+		region = aws.USEast
+	case "us-west-1":
+		region = aws.USWest
+	case "us-west-2":
+		region = aws.USWest2
+	}
+	return
+}
+
 func optFail(message string) {
 	fmt.Println(message)
 	fmt.Print(goopt.Help())
@@ -196,7 +210,7 @@ func main() {
 	goopt.Description = func() string {
 		return "Faster Than Light Deploy System"
 	}
-	goopt.Version = "0.2"
+	goopt.Version = "0.3"
 	goopt.Summary = "Deploy system built around S3."
 	goopt.Parse(nil)
 
@@ -219,7 +233,7 @@ func main() {
 		optFail(fmt.Sprintf("FTL_BUCKET not set"))
 	}
 
-	remote := ftl.NewRemoteRepository(ftlBucketEnv, auth, aws.USEast)
+	remote := ftl.NewRemoteRepository(ftlBucketEnv, auth, optToRegion(os.Getenv("AWS_DEFAULT_REGION")))
 	local := ftl.NewLocalRepository(ftlRoot)
 
 	if len(goopt.Args) > 0 {
