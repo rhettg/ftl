@@ -12,10 +12,10 @@ import "path/filepath"
 
 const (
 	PKG_SCRIPT_POST_SYNC = "post-spool"
-	PKG_SCRIPT_PRE_JUMP = "pre-jump"
+	PKG_SCRIPT_PRE_JUMP  = "pre-jump"
 	PKG_SCRIPT_POST_JUMP = "post-jump"
-	PKG_SCRIPT_UN_JUMP = "un-jump"
-	PKG_SCRIPT_CLEAN = "clean"
+	PKG_SCRIPT_UN_JUMP   = "un-jump"
+	PKG_SCRIPT_CLEAN     = "clean"
 )
 
 type LocalRepository struct {
@@ -24,14 +24,13 @@ type LocalRepository struct {
 
 type PackageScriptError struct {
 	WaitStatus syscall.WaitStatus
-	Script string
-	Revision string
+	Script     string
+	Revision   string
 }
 
 func (e *PackageScriptError) Error() string {
 	return fmt.Sprintf("Package script %s:%s exited %d", e.Revision, e.Script, e.WaitStatus.ExitStatus())
 }
-
 
 func NewLocalRepository(basePath string) (lr *LocalRepository) {
 	return &LocalRepository{basePath}
@@ -93,7 +92,7 @@ func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []s
 	for _, fileInfo := range localRevisionFiles {
 		localRevisions = append(localRevisions, strings.Join([]string{packageName, fileInfo.Name()}, "."))
 	}
-	
+
 	sort.Strings(localRevisions)
 	return
 }
@@ -175,7 +174,7 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 			return
 		}
 	}
-	
+
 	err = lr.RunPackageScript(name, PKG_SCRIPT_POST_SYNC)
 	if err != nil {
 		return
@@ -205,22 +204,21 @@ func (lr *LocalRepository) Jump(name string) (err error) {
 			return
 		}
 	}
-	
+
 	err = lr.RunPackageScript(name, PKG_SCRIPT_PRE_JUMP)
 	if err != nil {
 		return
 	}
-	
-	
+
 	activeRevision := lr.GetActiveRevision(revInfo.PackageName)
 	if len(activeRevision) > 0 {
-	err = lr.RunPackageScript(activeRevision, PKG_SCRIPT_UN_JUMP)
-	if err != nil {
-		return
-	}
+		err = lr.RunPackageScript(activeRevision, PKG_SCRIPT_UN_JUMP)
+		if err != nil {
+			return
+		}
 	}
 
-	// We have to, maybe, remove the older revision link first.	
+	// We have to, maybe, remove the older revision link first.
 	// Note that this isn't atomic, but neither is the ln command
 	activeFileName := lr.activeRevisionFilePath(revInfo.PackageName)
 	err = os.Remove(activeFileName)
@@ -288,12 +286,11 @@ func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (er
 	cwd, _ := os.Getwd()
 	defer os.Chdir(cwd)
 
-
 	revInfo := NewRevisionInfo(revisionName)
 
 	revPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
 	scriptPath := filepath.Join(revPath, "ftl", scriptName)
-	
+
 	os.Chdir(revPath)
 
 	_, err = os.Stat(scriptPath)
@@ -304,7 +301,7 @@ func (lr *LocalRepository) RunPackageScript(revisionName, scriptName string) (er
 		}
 		return
 	}
-	
+
 	cmd := exec.Command(scriptPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

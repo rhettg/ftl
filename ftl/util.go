@@ -21,6 +21,6 @@ func NewRevisionInfo(revisionName string) *RevisionInfo {
 		fmt.Println("Failed to parse revision", revisionName)
 		return nil
 	}
-	
+
 	return &RevisionInfo{parts[0], parts[1]}
 }

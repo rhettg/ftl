@@ -24,7 +24,7 @@ func buildRevisionId(file *os.File) (revisionId string, err error) {
 
 	now := time.Now().UTC()
 	hour, min, sec := now.Clock()
-	timeStamp := fmt.Sprintf("%s%d", now.Format("20060102"), hour * 60 *60 + min * 60 + sec)
+	timeStamp := fmt.Sprintf("%s%d", now.Format("20060102"), hour*60*60+min*60+sec)
 
 	// We're using pieces of our encoding data:
 	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)
@@ -124,7 +124,7 @@ func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName 
 	data, err := rr.bucket.Get(revFile)
 	if err != nil {
 		s3Error, _ := err.(*s3.Error)
-                if s3Error == nil {
+		if s3Error == nil {
 			fmt.Printf("Error retrieving revision, no error")
 			return
 		} else if s3Error.StatusCode == 404 {
