@@ -99,15 +99,18 @@ func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []s
 	return
 }
 
-func (lr *LocalRepository) activeRevisionFilePath(packageName string) string {
+func (lr *LocalRepository) currentRevisionFilePath(packageName string) string {
 	filePath := filepath.Join(lr.BasePath, packageName, "current")
 	return filePath
 }
 
-func (lr *LocalRepository) GetActiveRevision(packageName string) (revisionName string) {
-	activeFilePath := lr.activeRevisionFilePath(packageName)
+func (lr *LocalRepository) previousRevisionFilePath(packageName string) string {
+	filePath := filepath.Join(lr.BasePath, packageName, "previous")
+	return filePath
+}
 
-	revFilePath, err := os.Readlink(activeFilePath)
+func revisionFromLinkPath(packageName, revisionLinkPath string) (revisionName string) {
+	revFilePath, err := os.Readlink(revisionLinkPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
@@ -117,8 +120,17 @@ func (lr *LocalRepository) GetActiveRevision(packageName string) (revisionName s
 	}
 
 	revisionName = strings.Join([]string{packageName, filepath.Base(revFilePath)}, ".")
-
 	return
+}
+
+func (lr *LocalRepository) GetCurrentRevision(packageName string) (revisionName string) {
+	currentFilePath := lr.currentRevisionFilePath(packageName)
+	return revisionFromLinkPath(packageName, currentFilePath)
+}
+
+func (lr *LocalRepository) GetPreviousRevision(packageName string) (revisionName string) {
+	previousFilePath := lr.previousRevisionFilePath(packageName)
+	return revisionFromLinkPath(packageName, previousFilePath)
 }
 
 func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
@@ -187,7 +199,7 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 
 func (lr *LocalRepository) Remove(name string) error {
 	revInfo := NewRevisionInfo(name)
-	activeRevision := lr.GetActiveRevision(revInfo.PackageName)
+	activeRevision := lr.GetCurrentRevision(revInfo.PackageName)
 	if activeRevision == name {
 		return fmt.Errorf("Can't remove active revision")
 	}
@@ -204,13 +216,14 @@ func (lr *LocalRepository) Remove(name string) error {
 func (lr *LocalRepository) Jump(name string) (err error) {
 	revInfo := NewRevisionInfo(name)
 
-	if lr.GetActiveRevision(revInfo.PackageName) == name {
+	existingRevision := lr.GetCurrentRevision(revInfo.PackageName)
+	if existingRevision == name {
 		// Already active
 		return
 	}
 
-	revFileName := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
-	_, err = os.Stat(revFileName)
+	newRevisionPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
+	_, err = os.Stat(newRevisionPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println("Revision doesn't exist")
@@ -223,26 +236,41 @@ func (lr *LocalRepository) Jump(name string) (err error) {
 		return
 	}
 
-	activeRevision := lr.GetActiveRevision(revInfo.PackageName)
-	if len(activeRevision) > 0 {
-		err = lr.RunPackageScript(activeRevision, PKG_SCRIPT_UN_JUMP)
+	currentLinkPath := lr.currentRevisionFilePath(revInfo.PackageName)
+	previousLinkPath := lr.previousRevisionFilePath(revInfo.PackageName)
+	if len(existingRevision) > 0 {
+		previousRevisionPath := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", NewRevisionInfo(existingRevision).Revision)
+		err = os.Remove(previousLinkPath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Println("Failed to remove old previous")
+				return
+			}
+		}
+
+		err = os.Symlink(previousRevisionPath, previousLinkPath)
+		if err != nil {
+			fmt.Println("Failed creating symlink", err)
+			return
+		}
+
+		err = lr.RunPackageScript(existingRevision, PKG_SCRIPT_UN_JUMP)
 		if err != nil {
 			return
 		}
-	}
 
-	// We have to, maybe, remove the older revision link first.
-	// Note that this isn't atomic, but neither is the ln command
-	activeFileName := lr.activeRevisionFilePath(revInfo.PackageName)
-	err = os.Remove(activeFileName)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			fmt.Println("Failed to remove old version")
-			return
+		// We have to, maybe, remove the older revision link first.
+		// Note that this isn't atomic, but neither is the ln command
+		err = os.Remove(currentLinkPath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Println("Failed to remove old version")
+				return
+			}
 		}
-
 	}
-	err = os.Symlink(revFileName, activeFileName)
+
+	err = os.Symlink(newRevisionPath, currentLinkPath)
 	if err != nil {
 		fmt.Println("Failed creating symlink", err)
 	}
@@ -253,6 +281,64 @@ func (lr *LocalRepository) Jump(name string) (err error) {
 	}
 
 	return
+}
+
+func (lr *LocalRepository) JumpBack(pkgName string) error {
+	currentLinkPath := lr.currentRevisionFilePath(pkgName)
+	previousLinkPath := lr.previousRevisionFilePath(pkgName)
+
+	currentRevision := lr.GetCurrentRevision(pkgName)
+	previousRevision := lr.GetPreviousRevision(pkgName)
+
+	previousRevPath, err := os.Readlink(previousLinkPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("There is no previous revision")
+		}
+		return fmt.Errorf("Failed to read previous version: %v", err)
+	}
+
+	currentRevPath, err := os.Readlink(currentLinkPath)
+	if err != nil {
+		return fmt.Errorf("Failed to read current version: %v", err)
+	}
+
+	err = lr.RunPackageScript(previousRevision, PKG_SCRIPT_PRE_JUMP)
+	if err != nil {
+		return err
+	}
+
+	err = lr.RunPackageScript(currentRevision, PKG_SCRIPT_UN_JUMP)
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(currentLinkPath)
+	if err != nil {
+		return fmt.Errorf("Failed to remove current version: %v", err)
+	}
+
+	err = os.Symlink(previousRevPath, currentLinkPath)
+	if err != nil {
+		return fmt.Errorf("Failed creating symlink", err)
+	}
+
+	err = os.Remove(previousLinkPath)
+	if err != nil {
+		return fmt.Errorf("Failed to remove previous version: %v", err)
+	}
+
+	err = os.Symlink(currentRevPath, previousLinkPath)
+	if err != nil {
+		fmt.Println("Failed creating symlink", err)
+	}
+
+	err = lr.RunPackageScript(previousRevision, PKG_SCRIPT_POST_JUMP)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (lr *LocalRepository) CheckPackage(packageName string) (err error) {

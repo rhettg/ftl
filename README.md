@@ -45,7 +45,8 @@ Commands
     ftl list <package name>            # List available revisions for the package
     ftl list --master <package name>   # List available revisions for the package on the remote repository (S3)
     ftl sync                           # Check S3 for new stuff to do (new revisions, remove revisions, bless)
-    ftl jump <rev name>                # Bless the specified revision
+    ftl jump <rev name>                # Activate the specified revision
+    ftl jump-back <package name>       # Activiate the previous revision
     ftl jump --master <rev name>       # Mark the revision blessed in S3 (only needs to be done by one node)
     ftl purge --master <rev name>      # Remove the specified revision.
 

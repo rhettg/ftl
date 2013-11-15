@@ -116,13 +116,13 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionNa
 	return
 }
 
-func (rr *RemoteRepository) activeRevisionFilePath(packageName string) (revisionPath string) {
+func (rr *RemoteRepository) currentRevisionFilePath(packageName string) (revisionPath string) {
 	revisionPath = fmt.Sprintf("%s.rev", packageName)
 	return
 }
 
-func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName string, err error) {
-	revFile := rr.activeRevisionFilePath(packageName)
+func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName string, err error) {
+	revFile := rr.currentRevisionFilePath(packageName)
 
 	data, err := rr.bucket.Get(revFile)
 	if err != nil {
@@ -145,7 +145,7 @@ func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName 
 
 func (rr *RemoteRepository) Jump(packageName, revisionName string) error {
 	// TODO: Verify revision?
-	activeFile := rr.activeRevisionFilePath(packageName)
+	activeFile := rr.currentRevisionFilePath(packageName)
 
 	err := rr.bucket.Put(activeFile, []byte(revisionName), "text/plain", s3.Private)
 	if err != nil {
@@ -157,7 +157,7 @@ func (rr *RemoteRepository) Jump(packageName, revisionName string) error {
 
 func (rr *RemoteRepository) PurgeRevision(revisionName string) (err error) {
 	pkgName := revisionName[:strings.Index(revisionName, ".")]
-	activeRevision, err := rr.GetActiveRevision(pkgName)
+	activeRevision, err := rr.GetCurrentRevision(pkgName)
 	if err != nil {
 		return
 	}

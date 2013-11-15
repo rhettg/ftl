@@ -139,13 +139,13 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 	}
 
 	for _, packageName := range local.ListPackages() {
-		activeRev, err := remote.GetActiveRevision(packageName)
+		activeRev, err := remote.GetCurrentRevision(packageName)
 		if err != nil {
 			return err
 		}
 
 		if len(activeRev) > 0 {
-			activeRev, err := remote.GetActiveRevision(packageName)
+			activeRev, err := remote.GetCurrentRevision(packageName)
 			if err != nil {
 				return fmt.Errorf("Failed to get Active Revision: %v", err)
 			}
@@ -175,7 +175,7 @@ func jumpCmd(lr *ftl.LocalRepository, revName string) error {
 }
 
 func listCmd(lr *ftl.LocalRepository, packageName string) {
-	activeRev := lr.GetActiveRevision(packageName)
+	activeRev := lr.GetCurrentRevision(packageName)
 
 	for _, revisionName := range lr.ListRevisions(packageName) {
 		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
@@ -187,7 +187,7 @@ func listCmd(lr *ftl.LocalRepository, packageName string) {
 }
 
 func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) error {
-	activeRev, err := rr.GetActiveRevision(packageName)
+	activeRev, err := rr.GetCurrentRevision(packageName)
 	if err != nil {
 		return err
 	}
@@ -276,6 +276,13 @@ func main() {
 				}
 			} else {
 				optFail("Jump where?")
+			}
+		case "jump-back":
+			if len(goopt.Args) > 1 {
+				pkgName := strings.TrimSpace(goopt.Args[1])
+				err = local.JumpBack(pkgName)
+			} else {
+				optFail("Package name required")
 			}
 		case "list":
 			if len(goopt.Args) > 1 {
