@@ -75,9 +75,9 @@ func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepos
 	return nil
 }
 
-func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
+func removePackageRevision(local *ftl.LocalRepository, revisionName string) error {
 	fmt.Println("Remove", revisionName)
-	_ = local.Remove(revisionName)
+	return local.Remove(revisionName)
 }
 
 func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error) {
@@ -115,7 +115,7 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 			remoteNdx++
 		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
 			// We have an extra local revision, remove it
-			removePackageRevision(local, localRevisions[localNdx])
+			err = removePackageRevision(local, localRevisions[localNdx])
 			localNdx++
 		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
 			// We have a new remote revision, download it

@@ -185,9 +185,20 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 	return
 }
 
-func (lr *LocalRepository) Remove(name string) (err error) {
-	_ = name
-	return
+func (lr *LocalRepository) Remove(name string) error {
+	revInfo := NewRevisionInfo(name)
+	activeRevision := lr.GetActiveRevision(revInfo.PackageName)
+	if activeRevision == name {
+		return fmt.Errorf("Can't remove active revision")
+	}
+
+	revFileName := filepath.Join(lr.BasePath, revInfo.PackageName, "revs", revInfo.Revision)
+	e := os.RemoveAll(revFileName)
+	if e != nil {
+		return fmt.Errorf("Failed to remove %v: %v", revFileName, e)
+	}
+
+	return nil
 }
 
 func (lr *LocalRepository) Jump(name string) (err error) {
