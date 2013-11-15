@@ -2,6 +2,7 @@ package ftl
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io"
 	"launchpad.net/goamz/aws"
@@ -63,13 +64,12 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []st
 	return
 }
 
-func (rr *RemoteRepository) ListPackages() (pkgs []string) {
+func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 	pkgs = make([]string, 0, 1000)
 
-	listResp, err := rr.bucket.List("", ".", "", 1000)
-	if err != nil {
-		fmt.Println("Failed listing", err)
-		return
+	listResp, e := rr.bucket.List("", ".", "", 1000)
+	if e != nil {
+		err = fmt.Errorf("Failed listing: %v", err)
 	}
 
 	for _, prefix := range listResp.CommonPrefixes {
@@ -121,19 +121,20 @@ func (rr *RemoteRepository) activeRevisionFilePath(packageName string) (revision
 	return
 }
 
-func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName string) {
+func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName string, err error) {
 	revFile := rr.activeRevisionFilePath(packageName)
 
 	data, err := rr.bucket.Get(revFile)
 	if err != nil {
 		s3Error, _ := err.(*s3.Error)
 		if s3Error == nil {
-			fmt.Printf("Error retrieving revision, no error")
+			err = fmt.Errorf("Error retrieving revision, no error")
 			return
 		} else if s3Error.StatusCode == 404 {
+			err = nil
 			return
 		} else {
-			fmt.Printf("Error finding rev file", err)
+			err = fmt.Errorf("Error finding rev file: %v", err)
 			return
 		}
 	}
@@ -142,13 +143,46 @@ func (rr *RemoteRepository) GetActiveRevision(packageName string) (revisionName 
 	return
 }
 
-func (rr *RemoteRepository) Jump(packageName, revisionName string) (err error) {
+func (rr *RemoteRepository) Jump(packageName, revisionName string) error {
 	// TODO: Verify revision?
 	activeFile := rr.activeRevisionFilePath(packageName)
 
-	err = rr.bucket.Put(activeFile, []byte(revisionName), "text/plain", s3.Private)
+	err := rr.bucket.Put(activeFile, []byte(revisionName), "text/plain", s3.Private)
 	if err != nil {
-		fmt.Printf("Failed to put rev file", err)
+		err = fmt.Errorf("Failed to put rev file: %v", err)
 	}
+
+	return err
+}
+
+func (rr *RemoteRepository) PurgeRevision(revisionName string) (err error) {
+	pkgName := revisionName[:strings.Index(revisionName, ".")]
+	activeRevision, err := rr.GetActiveRevision(pkgName)
+	if err != nil {
+		return
+	}
+
+	if activeRevision == revisionName {
+		err = errors.New("Can't purge active revision")
+		return
+	}
+
+	listResp, err := rr.bucket.List(revisionName+".", "/", "", 1)
+	if err != nil {
+		fmt.Println("Failed listing", err)
+		err = fmt.Errorf("Failed listing %v", err)
+		return
+	}
+
+	if len(listResp.Contents) > 0 {
+		err = rr.bucket.Del(listResp.Contents[0].Key)
+		if err != nil {
+			fmt.Printf("Failed to remove", err)
+			err = fmt.Errorf("Failed to do s3 Del: %v", err)
+		}
+	} else {
+		err = errors.New("Failed to find revision")
+	}
+
 	return
 }

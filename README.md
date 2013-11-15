@@ -47,8 +47,7 @@ Commands
     ftl sync                           # Check S3 for new stuff to do (new revisions, remove revisions, bless)
     ftl jump <rev name>                # Bless the specified revision
     ftl jump --master <rev name>       # Mark the revision blessed in S3 (only needs to be done by one node)
-    ftl remove --master <rev name>     # Remove the specified revision.
-    ftl clean --master <package name>  # Clean up older revisions
+    ftl purge --master <rev name>      # Remove the specified revision.
 
 
 Installation and Setup
@@ -83,6 +82,10 @@ FTL needs access to environment variables that provide credentials.
 
     AWS_SECRET_ACCESS_KEY=<secret>
     AWS_ACCESS_KEY_ID=<key>
+
+If your `FTL_BUCKET` is not in the the standard us-east region, you can specify the region with:
+
+    AWS_DEFAULT_REGION=us-west-2
 
 This is easy to do for your deployment system, as you can just add them to your
 `.profile` or similiar. For production machines, it can be more complicated.  A

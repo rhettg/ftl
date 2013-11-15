@@ -36,11 +36,10 @@ func optFail(message string) {
 	os.Exit(1)
 }
 
-func spoolCmd(rr *ftl.RemoteRepository, fileName string) (err error) {
+func spoolCmd(rr *ftl.RemoteRepository, fileName string) error {
 	file, err := os.Open(fileName)
 	if err != nil {
-		fmt.Println("Error opening file", err)
-		return
+		return fmt.Errorf("Error opening file: %v", err)
 	}
 
 	defer file.Close()
@@ -51,21 +50,19 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) (err error) {
 
 	revisionName, err := rr.Spool(packageName, file)
 	if err != nil {
-		fmt.Println("Failed to spool", err)
-		return
+		return fmt.Errorf("Failed to spool: %v", err)
 	}
 
 	fmt.Println(revisionName)
-	return
+	return nil
 }
 
-func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) (err error) {
+func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) error {
 	//packageName := ftl.NewRevisionInfo(revisionName).PackageName
 
 	fileName, r, err := remote.GetRevisionReader(revisionName)
 	if err != nil {
-		fmt.Println("Failed listing", err)
-		return
+		return fmt.Errorf("Failed listing: %v", err)
 	}
 	if r != nil {
 		defer r.Close()
@@ -73,10 +70,9 @@ func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepos
 
 	err = local.Add(revisionName, fileName, r)
 	if err != nil {
-		fmt.Println("Failed adding", revisionName, err)
-		return
+		return fmt.Errorf("Failed adding %s: %v", revisionName, err)
 	}
-	return
+	return nil
 }
 
 func removePackageRevision(local *ftl.LocalRepository, revisionName string) {
@@ -134,40 +130,48 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 	return
 }
 
-func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) (err error) {
+func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 	for _, packageName := range local.ListPackages() {
-		err = syncPackage(remote, local, packageName)
+		err := syncPackage(remote, local, packageName)
 		if err != nil {
-			return
+			return err
 		}
 	}
 
 	for _, packageName := range local.ListPackages() {
-		activeRev := remote.GetActiveRevision(packageName)
+		activeRev, err := remote.GetActiveRevision(packageName)
+		if err != nil {
+			return err
+		}
+
 		if len(activeRev) > 0 {
-			err = local.Jump(remote.GetActiveRevision(packageName))
+			activeRev, err := remote.GetActiveRevision(packageName)
 			if err != nil {
-				fmt.Println(err)
-				return
+				return fmt.Errorf("Failed to get Active Revision: %v", err)
+			}
+
+			err = local.Jump(activeRev)
+			if err != nil {
+				return err
 			}
 		}
 	}
-	return
+	return nil
 }
 
-func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) {
+func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) error {
 	revParts := strings.Split(revName, ".")
 	packageName := revParts[0]
 
-	remote.Jump(packageName, revName)
+	return remote.Jump(packageName, revName)
 }
 
-func jumpCmd(lr *ftl.LocalRepository, revName string) (err error) {
-	err = lr.Jump(revName)
+func jumpCmd(lr *ftl.LocalRepository, revName string) error {
+	err := lr.Jump(revName)
 	if err != nil {
-		fmt.Println("Failed to activate", revName, err)
+		return fmt.Errorf("Failed to locally activate %s: %v", revName, err)
 	}
-	return
+	return nil
 }
 
 func listCmd(lr *ftl.LocalRepository, packageName string) {
@@ -182,8 +186,11 @@ func listCmd(lr *ftl.LocalRepository, packageName string) {
 	}
 }
 
-func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) {
-	activeRev := rr.GetActiveRevision(packageName)
+func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) error {
+	activeRev, err := rr.GetActiveRevision(packageName)
+	if err != nil {
+		return err
+	}
 
 	for _, revisionName := range rr.ListRevisions(packageName) {
 		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
@@ -192,6 +199,8 @@ func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) {
 			fmt.Println(revisionName)
 		}
 	}
+
+	return nil
 }
 
 func listPackagesCmd(local *ftl.LocalRepository) {
@@ -200,10 +209,15 @@ func listPackagesCmd(local *ftl.LocalRepository) {
 	}
 }
 
-func listRemotePackagesCmd(remote *ftl.RemoteRepository) {
-	for _, revision := range remote.ListPackages() {
+func listRemotePackagesCmd(remote *ftl.RemoteRepository) error {
+	packageList, err := remote.ListPackages()
+	if err != nil {
+		return err
+	}
+	for _, revision := range packageList {
 		fmt.Println(revision)
 	}
+	return nil
 }
 
 func main() {
@@ -242,12 +256,12 @@ func main() {
 		case "spool":
 			if len(goopt.Args) > 1 {
 				fileName := strings.TrimSpace(goopt.Args[1])
-				fullPath, err := filepath.Abs(fileName)
-				if err != nil {
+				fullPath, e := filepath.Abs(fileName)
+				if e != nil {
 					optFail("Unable to parse path")
 				}
 
-				spoolCmd(remote, fullPath)
+				err = spoolCmd(remote, fullPath)
 			} else {
 				optFail("Missing file name")
 			}
@@ -256,7 +270,7 @@ func main() {
 				revName := strings.TrimSpace(goopt.Args[1])
 
 				if *amMaster {
-					jumpRemoteCmd(remote, revName)
+					err = jumpRemoteCmd(remote, revName)
 				} else {
 					err = jumpCmd(local, revName)
 				}
@@ -266,19 +280,31 @@ func main() {
 		case "list":
 			if len(goopt.Args) > 1 {
 				if *amMaster {
-					listRemoteCmd(remote, strings.TrimSpace(goopt.Args[1]))
+					err = listRemoteCmd(remote, strings.TrimSpace(goopt.Args[1]))
 				} else {
 					listCmd(local, strings.TrimSpace(goopt.Args[1]))
 				}
 			} else {
 				if *amMaster {
-					listRemotePackagesCmd(remote)
+					err = listRemotePackagesCmd(remote)
 				} else {
 					listPackagesCmd(local)
 				}
 			}
 		case "sync":
 			err = syncCmd(remote, local)
+		case "purge":
+			if len(goopt.Args) < 2 {
+				optFail("Must specify revision to purge")
+			}
+
+			revName := strings.TrimSpace(goopt.Args[1])
+			if *amMaster {
+				err = remote.PurgeRevision(revName)
+			} else {
+				optFail("I only know how to purge master")
+			}
+
 		default:
 			optFail(fmt.Sprintf("Invalid command: %s", cmd))
 		}
@@ -287,6 +313,8 @@ func main() {
 	}
 
 	if err != nil {
+		fmt.Println(err)
+
 		if pse, ok := err.(*ftl.PackageScriptError); ok {
 			os.Exit(pse.WaitStatus.ExitStatus())
 		} else {
