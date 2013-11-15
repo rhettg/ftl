@@ -58,8 +58,6 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) error {
 }
 
 func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) error {
-	//packageName := ftl.NewRevisionInfo(revisionName).PackageName
-
 	fileName, r, err := remote.GetRevisionReader(revisionName)
 	if err != nil {
 		return fmt.Errorf("Failed listing: %v", err)
@@ -89,8 +87,6 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 
 	remoteRevisions := remote.ListRevisions(packageName)
 	localRevisions := local.ListRevisions(packageName)
-
-	//fmt.Println("Found", len(remoteRevisions), "remote and", len(localRevisions), "local")
 
 	remoteNdx, localNdx := 0, 0
 	for done := false; !done; {

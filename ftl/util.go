@@ -4,6 +4,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"os"
+	"io"
+	"crypto/md5"
 )
 
 func encodeBytes(b []byte) (s string) {
@@ -25,4 +28,19 @@ func NewRevisionInfo(revisionName string) *RevisionInfo {
 	}
 
 	return &RevisionInfo{parts[0], parts[1]}
+}
+
+func fileHashPrefix(file *os.File) (string, error) {
+	defer file.Seek(0, 0)
+
+	h := md5.New()
+
+	_, err := io.Copy(h, file)
+	if err != nil {
+		fmt.Println("Error copying file", err)
+		return "", err
+	}
+
+	hashEncode := encodeBytes(h.Sum(nil))
+	return hashEncode[:2], nil
 }

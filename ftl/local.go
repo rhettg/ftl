@@ -161,7 +161,15 @@ func (lr *LocalRepository) Add(name, fileName string, r io.Reader) (err error) {
 
 	w.Close()
 
-	// TODO: Check MD5 suffix
+	checkFile, err := os.Open(revisionFilePath)
+	hashPrefix, err := fileHashPrefix(checkFile)
+	if err != nil {
+		return
+	}
+
+	if hashPrefix != revisionName[len(revisionName)-2:] {
+		return fmt.Errorf("Checksum does not match")
+	}
 
 	if strings.HasSuffix(fileName, ".tgz") || strings.HasSuffix(fileName, ".gz") {
 		cmd := exec.Command("gunzip", revisionFilePath)

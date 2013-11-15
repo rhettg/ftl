@@ -1,7 +1,6 @@
 package ftl
 
 import (
-	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -14,17 +13,10 @@ import (
 
 func buildRevisionId(file *os.File) (revisionId string, err error) {
 	// Revsion id will be based on a combination of encoding timestamp and sha1 of the file.
-
-	defer file.Seek(0, 0)
-
-	h := md5.New()
-
-	_, err = io.Copy(h, file)
+	hashPrefix, err := fileHashPrefix(file)
 	if err != nil {
-		fmt.Println("Error copying file", err)
 		return
 	}
-	hashEncode := encodeBytes(h.Sum(nil))
 
 	now := time.Now().UTC()
 	hour, min, sec := now.Clock()
@@ -33,7 +25,7 @@ func buildRevisionId(file *os.File) (revisionId string, err error) {
 	// We're using pieces of our encoding data:
 	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)
 	//  * For our hash, we're only using 2 bytes
-	revisionId = fmt.Sprintf("%s%s", timeStamp, hashEncode[:2])
+	revisionId = fmt.Sprintf("%s%s", timeStamp, hashPrefix)
 	return
 }
 
