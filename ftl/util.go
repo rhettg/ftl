@@ -1,12 +1,12 @@
 package ftl
 
 import (
+	"crypto/md5"
 	"encoding/base64"
 	"fmt"
-	"strings"
-	"os"
 	"io"
-	"crypto/md5"
+	"os"
+	"strings"
 )
 
 func encodeBytes(b []byte) (s string) {

@@ -276,7 +276,11 @@ func main() {
 		case "jump-back":
 			if len(goopt.Args) > 1 {
 				pkgName := strings.TrimSpace(goopt.Args[1])
-				err = local.JumpBack(pkgName)
+				if *amMaster {
+					err = remote.JumpBack(pkgName)
+				} else {
+					err = local.JumpBack(pkgName)
+				}
 			} else {
 				optFail("Package name required")
 			}

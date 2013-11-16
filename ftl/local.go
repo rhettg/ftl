@@ -223,6 +223,9 @@ func (lr *LocalRepository) Remove(name string) error {
 
 func (lr *LocalRepository) Jump(name string) (err error) {
 	revInfo := NewRevisionInfo(name)
+	if revInfo == nil {
+		return fmt.Errorf("Failed to create revision object")
+	}
 
 	existingRevision := lr.GetCurrentRevision(revInfo.PackageName)
 	if existingRevision == name {

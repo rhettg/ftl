@@ -108,15 +108,23 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionNa
 	return
 }
 
-func (rr *RemoteRepository) currentRevisionFilePath(packageName string) (revisionPath string) {
+func (rr *RemoteRepository) currentRevisionFilePathOld(packageName string) (revisionPath string) {
 	revisionPath = fmt.Sprintf("%s.rev", packageName)
 	return
 }
 
-func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName string, err error) {
-	revFile := rr.currentRevisionFilePath(packageName)
+func (rr *RemoteRepository) currentRevisionFilePath(packageName string) (revisionPath string) {
+	revisionPath = fmt.Sprintf("%s.current", packageName)
+	return
+}
 
-	data, err := rr.bucket.Get(revFile)
+func (rr *RemoteRepository) previousRevisionFilePath(packageName string) (revisionPath string) {
+	revisionPath = fmt.Sprintf("%s.previous", packageName)
+	return
+}
+
+func (rr *RemoteRepository) revisionFromPath(revisionFilePath string) (revisionName string, err error) {
+	data, err := rr.bucket.Get(revisionFilePath)
 	if err != nil {
 		s3Error, _ := err.(*s3.Error)
 		if s3Error == nil {
@@ -135,16 +143,83 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName
 	return
 }
 
-func (rr *RemoteRepository) Jump(packageName, revisionName string) error {
-	// TODO: Verify revision?
-	activeFile := rr.currentRevisionFilePath(packageName)
-
-	err := rr.bucket.Put(activeFile, []byte(revisionName), "text/plain", s3.Private)
+func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName string, err error) {
+	revFile := rr.currentRevisionFilePath(packageName)
+	revisionName, err = rr.revisionFromPath(revFile)
 	if err != nil {
-		err = fmt.Errorf("Failed to put rev file: %v", err)
+		return
 	}
 
-	return err
+	if len(revisionName) == 0 {
+		revFile = rr.currentRevisionFilePathOld(packageName)
+		revisionName, err = rr.revisionFromPath(revFile)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (rr *RemoteRepository) Jump(packageName, revisionName string) error {
+	currentRevision, err := rr.GetCurrentRevision(packageName)
+	if err != nil {
+		return err
+	}
+
+	if currentRevision == revisionName {
+		fmt.Println("Revision is already selected")
+		return nil
+	}
+
+	previousFilePath := rr.previousRevisionFilePath(packageName)
+	err = rr.bucket.Put(previousFilePath, []byte(currentRevision), "text/plain", s3.Private)
+	if err != nil {
+		return fmt.Errorf("Failed to put previous rev file: %v", err)
+	}
+
+	currentFilePath := rr.currentRevisionFilePath(packageName)
+	err = rr.bucket.Put(currentFilePath, []byte(revisionName), "text/plain", s3.Private)
+	if err != nil {
+		return fmt.Errorf("Failed to put rev file: %v", err)
+	}
+
+	return nil
+}
+
+func (rr *RemoteRepository) JumpBack(packageName string) error {
+	previousFilePath := rr.previousRevisionFilePath(packageName)
+	currentFilePath := rr.currentRevisionFilePath(packageName)
+
+	previousRevision, err := rr.revisionFromPath(previousFilePath)
+	if err != nil {
+		return err
+	}
+
+	if len(previousRevision) == 0 {
+		return fmt.Errorf("Failed to find previous revision")
+	}
+
+	currentRevision, err := rr.revisionFromPath(currentFilePath)
+	if err != nil {
+		return err
+	}
+
+	if len(currentRevision) == 0 {
+		return fmt.Errorf("Failed to find current revision")
+	}
+
+	err = rr.bucket.Put(previousFilePath, []byte(currentRevision), "text/plain", s3.Private)
+	if err != nil {
+		return fmt.Errorf("Failed to put previous rev file: %v", err)
+	}
+
+	err = rr.bucket.Put(currentFilePath, []byte(previousRevision), "text/plain", s3.Private)
+	if err != nil {
+		return fmt.Errorf("Failed to put current rev file: %v", err)
+	}
+
+	return nil
 }
 
 func (rr *RemoteRepository) PurgeRevision(revisionName string) (err error) {
