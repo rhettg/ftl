@@ -151,10 +151,20 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName
 	}
 
 	if len(revisionName) == 0 {
-		revFile = rr.currentRevisionFilePathOld(packageName)
-		revisionName, err = rr.revisionFromPath(revFile)
+		oldRevFile := rr.currentRevisionFilePathOld(packageName)
+		revisionName, err = rr.revisionFromPath(oldRevFile)
 		if err != nil {
 			return
+		}
+
+		if len(revisionName) > 0 {
+			// This was the old way to name this file, let's port us to the new way:
+			err = rr.bucket.Put(revFile, []byte(revisionName), "text/plain", s3.Private)
+			if err != nil {
+				return "", fmt.Errorf("Failed to put new current rev file: %v", err)
+			}
+
+			rr.bucket.Del(oldRevFile)
 		}
 	}
 
