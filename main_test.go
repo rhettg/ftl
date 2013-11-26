@@ -7,9 +7,9 @@ import (
 
 func Test_syncPackage_downNone(t *testing.T) {
 	rr := []ftl.RevisionInfo{
-		ftl.RevisionInfo{"test", "001"},
-		ftl.RevisionInfo{"test", "002"},
-		ftl.RevisionInfo{"test", "003"},
+		{"test", "001"},
+		{"test", "002"},
+		{"test", "003"},
 	}
 
 	lr := []ftl.RevisionInfo{
@@ -17,14 +17,6 @@ func Test_syncPackage_downNone(t *testing.T) {
 		{"test", "002"},
 		{"test", "003"},
 	}
-
-	/*
-	lr = []ftl.RevisionInfo{
-		ftl.RevisionInfo{"test", "001"},
-		ftl.RevisionInfo{"test", "002"},
-		ftl.RevisionInfo{"test", "003"},
-	}
-	*/
 
 	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {

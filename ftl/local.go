@@ -39,8 +39,6 @@ func NewLocalRepository(basePath string) (lr *LocalRepository) {
 }
 
 func (lr *LocalRepository) ListPackages() (packageNames []string) {
-	packageNames = make([]string, 0, 1000)
-
 	repoFile, err := os.Open(lr.BasePath)
 	if err != nil {
 		fmt.Println("Failed to open", lr.BasePath)
@@ -65,8 +63,6 @@ func (lr *LocalRepository) ListPackages() (packageNames []string) {
 
 func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []RevisionInfo) {
 	packagePath := filepath.Join(lr.BasePath, packageName, "revs")
-
-	localRevisions = make([]RevisionInfo, 0, 1000)
 
 	packageFile, err := os.Open(packagePath)
 	if err != nil {
@@ -249,7 +245,7 @@ func (lr *LocalRepository) Jump(revision RevisionInfo) (err error) {
 
 	currentLinkPath := lr.currentRevisionFilePath(revision.PackageName)
 	previousLinkPath := lr.previousRevisionFilePath(revision.PackageName)
-	if len(revision.Revision) > 0 {
+	if revision.Revision == "" {
 		previousRevisionPath := filepath.Join(lr.BasePath, existingRevision.PackageName, "revs", existingRevision.Revision)
 		err = os.Remove(previousLinkPath)
 		if err != nil {

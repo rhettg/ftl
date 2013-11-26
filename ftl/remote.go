@@ -40,8 +40,6 @@ func NewRemoteRepository(name string, auth aws.Auth, region aws.Region) (remote 
 }
 
 func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []RevisionInfo, err error) {
-	revisionList = make([]RevisionInfo, 0, 1000)
-
 	listResp, err := rr.bucket.List(packageName+".", ".", "", 1000)
 	if err != nil {
 		fmt.Println("Failed listing", err)
@@ -58,8 +56,6 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []Re
 }
 
 func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
-	pkgs = make([]string, 0, 1000)
-
 	listResp, e := rr.bucket.List("", ".", "", 1000)
 	if e != nil {
 		err = fmt.Errorf("Failed listing: %v", err)
@@ -151,14 +147,14 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision Rev
 		return
 	}
 
-	if len(revisionName) == 0 {
+	if revisionName == "" {
 		oldRevFile := rr.currentRevisionFilePathOld(packageName)
 		revisionName, err = rr.revisionFromPath(oldRevFile)
 		if err != nil {
 			return
 		}
 
-		if len(revisionName) > 0 {
+		if revisionName == "" {
 			// This was the old way to name this file, let's port us to the new way:
 			err = rr.bucket.Put(revFile, []byte(revisionName), "text/plain", s3.Private)
 			if err != nil {
@@ -170,7 +166,7 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision Rev
 		}
 	}
 
-	if len(revisionName) > 0 {
+	if revisionName != "" {
 		revision = *NewRevisionInfo(revisionName)
 	}
 
@@ -184,7 +180,7 @@ func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision Re
 		return
 	}
 
-	if len(revisionName) > 0 {
+	if revisionName == "" {
 		revision = *NewRevisionInfo(revisionName)
 	}
 
@@ -226,7 +222,7 @@ func (rr *RemoteRepository) JumpBack(packageName string) error {
 		return err
 	}
 
-	if len(previousRevision) == 0 {
+	if previousRevision == "" {
 		return fmt.Errorf("Failed to find previous revision")
 	}
 
@@ -235,7 +231,7 @@ func (rr *RemoteRepository) JumpBack(packageName string) error {
 		return err
 	}
 
-	if len(currentRevision) == 0 {
+	if currentRevision == "" {
 		return fmt.Errorf("Failed to find current revision")
 	}
 

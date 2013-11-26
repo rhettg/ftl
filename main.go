@@ -90,15 +90,6 @@ func syncPackage(remoteRevisions, localRevisions []ftl.RevisionInfo, startRev ft
 
 	remoteNdx, localNdx := 0, 0
 	for done := false; !done; {
-		/*
-			if remoteNdx < len(remoteRevisions) {
-				fmt.Println("Remote", remoteRevisions[remoteNdx])
-			}
-			if localNdx < len(localRevisions) {
-				fmt.Println("Local", localRevisions[localNdx])
-			}
-		*/
-
 		switch {
 		case remoteNdx >= len(remoteRevisions) && localNdx >= len(localRevisions):
 			done = true
