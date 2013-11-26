@@ -187,7 +187,7 @@ func downloadRemoteRevisions(r *ftl.RemoteRepository, l *ftl.LocalRepository, re
 
 	for _, err := range errList {
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed downloading revisions")
 		}
 	}
 
