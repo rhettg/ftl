@@ -11,10 +11,14 @@ import (
 	"strings"
 )
 
+const Version = "0.1.0"
+
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 	"output verbosely", "be quiet, instead")
 
 var amMaster = goopt.Flag([]string{"--master"}, nil, "Execute against master repository", "")
+
+var amVersion = goopt.Flag([]string{"--version"}, nil, "Display current version", "")
 
 func optToRegion(regionName string) (region aws.Region) {
 	region = aws.USEast
@@ -220,9 +224,14 @@ func main() {
 	goopt.Description = func() string {
 		return "Faster Than Light Deploy System"
 	}
-	goopt.Version = "0.3"
+	goopt.Version = Version
 	goopt.Summary = "Deploy system built around S3."
 	goopt.Parse(nil)
+
+	if *amVersion {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 
 	ftlRootEnv := os.Getenv("FTL_ROOT")
 	if len(ftlRootEnv) == 0 {
