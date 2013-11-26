@@ -32,6 +32,15 @@ func NewRevisionInfo(revisionName string) *RevisionInfo {
 	return &RevisionInfo{parts[0], parts[1]}
 }
 
+func (ri *RevisionInfo) Name() string {
+	return fmt.Sprintf("%v.%v", ri.PackageName, ri.Revision)
+}
+
+type RevisionListResult struct {
+	Revisions []RevisionInfo
+	Err       error
+}
+
 func fileHashPrefix(file *os.File) (string, error) {
 	defer file.Seek(0, 0)
 

@@ -39,8 +39,8 @@ func NewRemoteRepository(name string, auth aws.Auth, region aws.Region) (remote 
 	return &RemoteRepository{bucket}
 }
 
-func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []string, err error) {
-	revisionList = make([]string, 0, 1000)
+func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []RevisionInfo, err error) {
+	revisionList = make([]RevisionInfo, 0, 1000)
 
 	listResp, err := rr.bucket.List(packageName+".", ".", "", 1000)
 	if err != nil {
@@ -50,7 +50,8 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []st
 
 	for _, prefix := range listResp.CommonPrefixes {
 		revisionName := prefix[:len(prefix)-1]
-		revisionList = append(revisionList, revisionName)
+		revision := *NewRevisionInfo(revisionName)
+		revisionList = append(revisionList, revision)
 	}
 
 	return
@@ -70,8 +71,8 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 	return
 }
 
-func (rr *RemoteRepository) GetRevisionReader(revisionName string) (fileName string, reader io.ReadCloser, err error) {
-	listResp, err := rr.bucket.List(revisionName, "", "", 1)
+func (rr *RemoteRepository) GetRevisionReader(revision RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
+	listResp, err := rr.bucket.List(revision.Name(), "", "", 1)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return
@@ -85,7 +86,7 @@ func (rr *RemoteRepository) GetRevisionReader(revisionName string) (fileName str
 	return
 }
 
-func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionName string, err error) {
+func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision RevisionInfo, err error) {
 	statInfo, err := file.Stat()
 	if err != nil {
 		fmt.Println("Error stating file", err)
@@ -98,7 +99,7 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revisionNa
 		return
 	}
 
-	revisionName = fmt.Sprintf("%s.%s", packageName, revisionId)
+	revision = RevisionInfo{packageName, revisionId}
 
 	fileName := statInfo.Name()
 	nameBase := fileName[:strings.Index(fileName, ".")]
@@ -143,9 +144,9 @@ func (rr *RemoteRepository) revisionFromPath(revisionFilePath string) (revisionN
 	return
 }
 
-func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName string, err error) {
+func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision RevisionInfo, err error) {
 	revFile := rr.currentRevisionFilePath(packageName)
-	revisionName, err = rr.revisionFromPath(revFile)
+	revisionName, err := rr.revisionFromPath(revFile)
 	if err != nil {
 		return
 	}
@@ -161,45 +162,54 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName
 			// This was the old way to name this file, let's port us to the new way:
 			err = rr.bucket.Put(revFile, []byte(revisionName), "text/plain", s3.Private)
 			if err != nil {
-				return "", fmt.Errorf("Failed to put new current rev file: %v", err)
+				err = fmt.Errorf("Failed to put new current rev file: %v", err)
+				return
 			}
 
 			rr.bucket.Del(oldRevFile)
 		}
 	}
 
+	if len(revisionName) > 0 {
+		revision = *NewRevisionInfo(revisionName)
+	}
+
 	return
 }
 
-func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revisionName string, err error) {
+func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision RevisionInfo, err error) {
 	revFile := rr.previousRevisionFilePath(packageName)
-	revisionName, err = rr.revisionFromPath(revFile)
+	revisionName, err := rr.revisionFromPath(revFile)
 	if err != nil {
 		return
 	}
 
+	if len(revisionName) > 0 {
+		revision = *NewRevisionInfo(revisionName)
+	}
+
 	return
 }
 
-func (rr *RemoteRepository) Jump(packageName, revisionName string) error {
-	currentRevision, err := rr.GetCurrentRevision(packageName)
+func (rr *RemoteRepository) Jump(revision RevisionInfo) error {
+	currentRevision, err := rr.GetCurrentRevision(revision.PackageName)
 	if err != nil {
 		return err
 	}
 
-	if currentRevision == revisionName {
+	if currentRevision == revision {
 		fmt.Println("Revision is already selected")
 		return nil
 	}
 
-	previousFilePath := rr.previousRevisionFilePath(packageName)
-	err = rr.bucket.Put(previousFilePath, []byte(currentRevision), "text/plain", s3.Private)
+	previousFilePath := rr.previousRevisionFilePath(revision.PackageName)
+	err = rr.bucket.Put(previousFilePath, []byte(currentRevision.Name()), "text/plain", s3.Private)
 	if err != nil {
 		return fmt.Errorf("Failed to put previous rev file: %v", err)
 	}
 
-	currentFilePath := rr.currentRevisionFilePath(packageName)
-	err = rr.bucket.Put(currentFilePath, []byte(revisionName), "text/plain", s3.Private)
+	currentFilePath := rr.currentRevisionFilePath(revision.PackageName)
+	err = rr.bucket.Put(currentFilePath, []byte(revision.Name()), "text/plain", s3.Private)
 	if err != nil {
 		return fmt.Errorf("Failed to put rev file: %v", err)
 	}
@@ -242,19 +252,18 @@ func (rr *RemoteRepository) JumpBack(packageName string) error {
 	return nil
 }
 
-func (rr *RemoteRepository) PurgeRevision(revisionName string) (err error) {
-	pkgName := revisionName[:strings.Index(revisionName, ".")]
-	activeRevision, err := rr.GetCurrentRevision(pkgName)
+func (rr *RemoteRepository) PurgeRevision(revision RevisionInfo) (err error) {
+	activeRevision, err := rr.GetCurrentRevision(revision.PackageName)
 	if err != nil {
 		return
 	}
 
-	if activeRevision == revisionName {
+	if activeRevision == revision {
 		err = errors.New("Can't purge active revision")
 		return
 	}
 
-	listResp, err := rr.bucket.List(revisionName+".", "/", "", 1)
+	listResp, err := rr.bucket.List(revision.Name()+".", "/", "", 1)
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		err = fmt.Errorf("Failed listing %v", err)

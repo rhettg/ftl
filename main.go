@@ -52,17 +52,17 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) error {
 	parts := strings.Split(name, ".")
 	packageName := parts[0]
 
-	revisionName, err := rr.Spool(packageName, file)
+	revision, err := rr.Spool(packageName, file)
 	if err != nil {
 		return fmt.Errorf("Failed to spool: %v", err)
 	}
 
-	fmt.Println(revisionName)
+	fmt.Println(revision.Name())
 	return nil
 }
 
-func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revisionName string) error {
-	fileName, r, err := remote.GetRevisionReader(revisionName)
+func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revision ftl.RevisionInfo) error {
+	fileName, r, err := remote.GetRevisionReader(revision)
 	if err != nil {
 		return fmt.Errorf("Failed listing: %v", err)
 	}
@@ -70,21 +70,21 @@ func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepos
 		defer r.Close()
 	}
 
-	err = local.Add(revisionName, fileName, r)
+	err = local.Add(revision, fileName, r)
 	if err != nil {
-		return fmt.Errorf("Failed adding %s: %v", revisionName, err)
+		return fmt.Errorf("Failed adding %s: %v", revision.Name(), err)
 	}
 	return nil
 }
 
-func removePackageRevision(local *ftl.LocalRepository, revisionName string) error {
-	fmt.Println("Remove", revisionName)
-	return local.Remove(revisionName)
+func removePackageRevision(local *ftl.LocalRepository, revision ftl.RevisionInfo) error {
+	fmt.Println("Remove", revision.Name())
+	return local.Remove(revision)
 }
 
-func syncPackage(remoteRevisions, localRevisions []string, startRev string) (downloadRevs, purgeRevs []string, err error) {
-	downloadRevs = []string{}
-	purgeRevs = []string{}
+func syncPackage(remoteRevisions, localRevisions []ftl.RevisionInfo, startRev ftl.RevisionInfo) (downloadRevs, purgeRevs []ftl.RevisionInfo, err error) {
+	downloadRevs = []ftl.RevisionInfo{}
+	purgeRevs = []ftl.RevisionInfo{}
 
 	remoteNdx, localNdx := 0, 0
 	for done := false; !done; {
@@ -110,14 +110,14 @@ func syncPackage(remoteRevisions, localRevisions []string, startRev string) (dow
 		case remoteRevisions[remoteNdx] == localRevisions[localNdx]:
 			remoteNdx++
 			localNdx++
-		case remoteRevisions[remoteNdx] < startRev:
+		case remoteRevisions[remoteNdx].Revision < startRev.Revision:
 			// To early for us, carry on
 			remoteNdx++
-		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
+		case remoteRevisions[remoteNdx].Revision < localRevisions[localNdx].Revision:
 			// We have a new remote revision, download it
 			downloadRevs = append(downloadRevs, remoteRevisions[remoteNdx])
 			remoteNdx++
-		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
+		case remoteRevisions[remoteNdx].Revision > localRevisions[localNdx].Revision:
 			// We have an extra local revision, remove it
 			purgeRevs = append(purgeRevs, localRevisions[localNdx])
 			localNdx++
@@ -136,10 +136,18 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 			return err
 		}
 
-		currentRev, err := remote.GetCurrentRevision(packageName)
-		if err != nil {
-			return err
+		crChan := make(chan ftl.RevisionListResult)
+		go func() {
+			currentRev, err := remote.GetCurrentRevision(packageName)
+			crChan <- ftl.RevisionListResult{[]ftl.RevisionInfo{currentRev}, err}
+		}()
+
+		crResult := <-crChan
+		if crResult.Err != nil {
+			return crResult.Err
 		}
+
+		currentRev := crResult.Revisions[0]
 
 		previousRev, err := remote.GetPreviousRevision(packageName)
 		if err != nil {
@@ -147,7 +155,7 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 		}
 
 		firstRev := previousRev
-		if currentRev < firstRev {
+		if currentRev.Revision < firstRev.Revision {
 			firstRev = currentRev
 		}
 
@@ -170,7 +178,7 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 			}
 		}
 
-		if len(currentRev) > 0 {
+		if len(currentRev.Revision) > 0 {
 			currentRev, err := remote.GetCurrentRevision(packageName)
 			if err != nil {
 				return fmt.Errorf("Failed to get Active Revision: %v", err)
@@ -193,17 +201,10 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 	return nil
 }
 
-func jumpRemoteCmd(remote *ftl.RemoteRepository, revName string) error {
-	revParts := strings.Split(revName, ".")
-	packageName := revParts[0]
-
-	return remote.Jump(packageName, revName)
-}
-
-func jumpCmd(lr *ftl.LocalRepository, revName string) error {
-	err := lr.Jump(revName)
+func jumpCmd(lr *ftl.LocalRepository, revision ftl.RevisionInfo) error {
+	err := lr.Jump(revision)
 	if err != nil {
-		return fmt.Errorf("Failed to locally activate %s: %v", revName, err)
+		return fmt.Errorf("Failed to locally activate %s: %v", revision.Name(), err)
 	}
 	return nil
 }
@@ -211,11 +212,11 @@ func jumpCmd(lr *ftl.LocalRepository, revName string) error {
 func listCmd(lr *ftl.LocalRepository, packageName string) {
 	activeRev := lr.GetCurrentRevision(packageName)
 
-	for _, revisionName := range lr.ListRevisions(packageName) {
-		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
-			fmt.Printf("%s\t(active)\n", revisionName)
+	for _, revision := range lr.ListRevisions(packageName) {
+		if len(activeRev.Revision) > 0 && revision == activeRev {
+			fmt.Printf("%s\t(active)\n", revision.Name())
 		} else {
-			fmt.Println(revisionName)
+			fmt.Println(revision.Name())
 		}
 	}
 }
@@ -231,11 +232,11 @@ func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) error {
 		return err
 	}
 
-	for _, revisionName := range revisionList {
-		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
-			fmt.Printf("%s\t(active)\n", revisionName)
+	for _, revision := range revisionList {
+		if len(activeRev.Revision) > 0 && activeRev == revision {
+			fmt.Printf("%s\t(active)\n", revision.Name())
 		} else {
-			fmt.Println(revisionName)
+			fmt.Println(revision.Name())
 		}
 	}
 
@@ -311,12 +312,12 @@ func main() {
 			}
 		case "jump":
 			if len(goopt.Args) > 1 {
-				revName := strings.TrimSpace(goopt.Args[1])
+				revision := *ftl.NewRevisionInfo(strings.TrimSpace(goopt.Args[1]))
 
 				if *amMaster {
-					err = jumpRemoteCmd(remote, revName)
+					err = remote.Jump(revision)
 				} else {
-					err = jumpCmd(local, revName)
+					err = local.Jump(revision)
 				}
 			} else {
 				optFail("Jump where?")
@@ -353,9 +354,9 @@ func main() {
 				optFail("Must specify revision to purge")
 			}
 
-			revName := strings.TrimSpace(goopt.Args[1])
+			revision := *ftl.NewRevisionInfo(strings.TrimSpace(goopt.Args[1]))
 			if *amMaster {
-				err = remote.PurgeRevision(revName)
+				err = remote.PurgeRevision(revision)
 			} else {
 				optFail("I only know how to purge master")
 			}

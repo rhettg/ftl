@@ -2,22 +2,31 @@ package main
 
 import (
 	"testing"
+	"github.com/rhettg/ftl/ftl"
 )
 
 func Test_syncPackage_downNone(t *testing.T) {
-	rr := []string{
-		"001",
-		"002",
-		"003",
+	rr := []ftl.RevisionInfo{
+		ftl.RevisionInfo{"test", "001"},
+		ftl.RevisionInfo{"test", "002"},
+		ftl.RevisionInfo{"test", "003"},
 	}
 
-	lr := []string{
-		"001",
-		"002",
-		"003",
+	lr := []ftl.RevisionInfo{
+		{"test", "001"},
+		{"test", "002"},
+		{"test", "003"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, "001")
+	/*
+	lr = []ftl.RevisionInfo{
+		ftl.RevisionInfo{"test", "001"},
+		ftl.RevisionInfo{"test", "002"},
+		ftl.RevisionInfo{"test", "003"},
+	}
+	*/
+
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -31,17 +40,17 @@ func Test_syncPackage_downNone(t *testing.T) {
 }
 
 func Test_syncPackage_downMore(t *testing.T) {
-	rr := []string{
-		"001",
-		"002",
-		"003",
+	rr := []ftl.RevisionInfo{
+		{"test", "001"},
+		{"test", "002"},
+		{"test", "003"},
 	}
 
-	lr := []string{
-		"002",
+	lr := []ftl.RevisionInfo{
+		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, "001")
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -54,23 +63,23 @@ func Test_syncPackage_downMore(t *testing.T) {
 		t.Error("Expected no purges")
 	}
 
-	if download[0] != "001" {
+	if download[0].Revision != "001" {
 		t.Error("Expected 001", download)
 	}
 }
 
 func Test_syncPackage_downMoreLimit(t *testing.T) {
-	rr := []string{
-		"001",
-		"002",
-		"003",
+	rr := []ftl.RevisionInfo{
+		{"test", "001"},
+		{"test", "002"},
+		{"test", "003"},
 	}
 
-	lr := []string{
-		"002",
+	lr := []ftl.RevisionInfo{
+		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, "002")
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "002"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -83,22 +92,22 @@ func Test_syncPackage_downMoreLimit(t *testing.T) {
 		t.Error("Expected no purges")
 	}
 
-	if download[0] != "003" {
+	if download[0].Revision != "003" {
 		t.Error("Expected 003", download)
 	}
 }
 
 func Test_syncPackage_purgeOne(t *testing.T) {
-	rr := []string{
-		"002",
+	rr := []ftl.RevisionInfo{
+		{"test", "002"},
 	}
 
-	lr := []string{
-		"001",
-		"002",
+	lr := []ftl.RevisionInfo{
+		{"test", "001"},
+		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, "001")
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -111,7 +120,7 @@ func Test_syncPackage_purgeOne(t *testing.T) {
 		t.Error("Expected a purges")
 	}
 
-	if purge[0] != "001" {
+	if purge[0].Revision != "001" {
 		t.Error("Expected purge 001")
 	}
 }
