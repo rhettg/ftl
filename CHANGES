@@ -1,3 +1,11 @@
+ftl (0.2.0)
+
+  * Limit how many revisions are downloaded on sync.
+  * Split up downloading and purging steps on sync.
+  * Concurrent downloads.
+
+-- Rhett Garber <rhettg@gmail.com>  Tue, 26 Nov 2013 10:36:00 -0800
+
 ftl (0.1.0)
 
   * Initial Numbered Release
