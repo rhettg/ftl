@@ -10,7 +10,9 @@ import (
 )
 
 func encodeBytes(b []byte) (s string) {
-	enc := base64.NewEncoding("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~")
+	// Note that this encoding is not decodable, as we are using '0' for two different bytes.
+	// This is much safer for using these as parts of file names.
+	enc := base64.NewEncoding("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz0")
 	s = enc.EncodeToString(b)
 	return
 }
