@@ -39,7 +39,7 @@ func NewRemoteRepository(name string, auth aws.Auth, region aws.Region) (remote 
 	return &RemoteRepository{bucket}
 }
 
-func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []string) {
+func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []string, err error) {
 	revisionList = make([]string, 0, 1000)
 
 	listResp, err := rr.bucket.List(packageName+".", ".", "", 1000)
@@ -166,6 +166,16 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revisionName
 
 			rr.bucket.Del(oldRevFile)
 		}
+	}
+
+	return
+}
+
+func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revisionName string, err error) {
+	revFile := rr.previousRevisionFilePath(packageName)
+	revisionName, err = rr.revisionFromPath(revFile)
+	if err != nil {
+		return
 	}
 
 	return

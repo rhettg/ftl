@@ -82,15 +82,9 @@ func removePackageRevision(local *ftl.LocalRepository, revisionName string) erro
 	return local.Remove(revisionName)
 }
 
-func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packageName string) (err error) {
-	err = local.CheckPackage(packageName)
-	if err != nil {
-		fmt.Println("Package initialize failed", err)
-		return
-	}
-
-	remoteRevisions := remote.ListRevisions(packageName)
-	localRevisions := local.ListRevisions(packageName)
+func syncPackage(remoteRevisions, localRevisions []string, startRev string) (downloadRevs, purgeRevs []string, err error) {
+	downloadRevs = []string{}
+	purgeRevs = []string{}
 
 	remoteNdx, localNdx := 0, 0
 	for done := false; !done; {
@@ -107,22 +101,25 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 		case remoteNdx >= len(remoteRevisions) && localNdx >= len(localRevisions):
 			done = true
 		case remoteNdx >= len(remoteRevisions):
-			// We have local revisions, than remote... hmm
+			// We have more local revisions, than remote... hmm
 			done = true
 		case localNdx >= len(localRevisions):
 			// We have more remote revisions than local, just download what's left
-			err = downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
-			remoteNdx++
-		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
-			// We have an extra local revision, remove it
-			err = removePackageRevision(local, localRevisions[localNdx])
-			localNdx++
-		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
-			// We have a new remote revision, download it
-			err = downloadPackageRevision(remote, local, remoteRevisions[remoteNdx])
+			downloadRevs = append(downloadRevs, remoteRevisions[remoteNdx])
 			remoteNdx++
 		case remoteRevisions[remoteNdx] == localRevisions[localNdx]:
 			remoteNdx++
+			localNdx++
+		case remoteRevisions[remoteNdx] < startRev:
+			// To early for us, carry on
+			remoteNdx++
+		case remoteRevisions[remoteNdx] < localRevisions[localNdx]:
+			// We have a new remote revision, download it
+			downloadRevs = append(downloadRevs, remoteRevisions[remoteNdx])
+			remoteNdx++
+		case remoteRevisions[remoteNdx] > localRevisions[localNdx]:
+			// We have an extra local revision, remove it
+			purgeRevs = append(purgeRevs, localRevisions[localNdx])
 			localNdx++
 		}
 	}
@@ -132,29 +129,66 @@ func syncPackage(remote *ftl.RemoteRepository, local *ftl.LocalRepository, packa
 
 func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 	for _, packageName := range local.ListPackages() {
-		err := syncPackage(remote, local, packageName)
-		if err != nil {
-			return err
-		}
-	}
 
-	for _, packageName := range local.ListPackages() {
-		activeRev, err := remote.GetCurrentRevision(packageName)
+		err := local.CheckPackage(packageName)
 		if err != nil {
+			fmt.Println("Package initialize failed", err)
 			return err
 		}
 
-		if len(activeRev) > 0 {
-			activeRev, err := remote.GetCurrentRevision(packageName)
-			if err != nil {
-				return fmt.Errorf("Failed to get Active Revision: %v", err)
-			}
+		currentRev, err := remote.GetCurrentRevision(packageName)
+		if err != nil {
+			return err
+		}
 
-			err = local.Jump(activeRev)
+		previousRev, err := remote.GetPreviousRevision(packageName)
+		if err != nil {
+			return err
+		}
+
+		firstRev := previousRev
+		if currentRev < firstRev {
+			firstRev = currentRev
+		}
+
+		localRevisions := local.ListRevisions(packageName)
+
+		remoteRevisions, err := remote.ListRevisions(packageName)
+		if err != nil {
+			return err
+		}
+
+		download, purge, err := syncPackage(remoteRevisions, localRevisions, firstRev)
+		if err != nil {
+			return err
+		}
+
+		for _, rev := range download {
+			err = downloadPackageRevision(remote, local, rev)
 			if err != nil {
 				return err
 			}
 		}
+
+		if len(currentRev) > 0 {
+			currentRev, err := remote.GetCurrentRevision(packageName)
+			if err != nil {
+				return fmt.Errorf("Failed to get Active Revision: %v", err)
+			}
+
+			err = local.Jump(currentRev)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, rev := range purge {
+			err = removePackageRevision(local, rev)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 	return nil
 }
@@ -192,7 +226,12 @@ func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) error {
 		return err
 	}
 
-	for _, revisionName := range rr.ListRevisions(packageName) {
+	revisionList, err := rr.ListRevisions(packageName)
+	if err != nil {
+		return err
+	}
+
+	for _, revisionName := range revisionList {
 		if len(activeRev) > 0 && strings.HasSuffix(revisionName, activeRev) {
 			fmt.Printf("%s\t(active)\n", revisionName)
 		} else {
