@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+const DOWNLOAD_WORKERS = 4
+
 const Version = "0.1.0"
 
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
@@ -127,64 +129,109 @@ func syncPackage(remoteRevisions, localRevisions []ftl.RevisionInfo, startRev ft
 	return
 }
 
+func retrieveRemoteRevisions(r *ftl.RemoteRepository, packageName string) (curRev, prevRev ftl.RevisionInfo, revisions []ftl.RevisionInfo, err error) {
+	crChan := make(chan ftl.RevisionListResult)
+	go func() {
+		currentRev, err := r.GetCurrentRevision(packageName)
+		crChan <- ftl.RevisionListResult{[]ftl.RevisionInfo{currentRev}, err}
+	}()
+
+	prChan := make(chan ftl.RevisionListResult)
+	go func() {
+		previousRev, err := r.GetPreviousRevision(packageName)
+		prChan <- ftl.RevisionListResult{[]ftl.RevisionInfo{previousRev}, err}
+	}()
+
+	rrChan := make(chan ftl.RevisionListResult)
+	go func() {
+		remoteRevisions, err := r.ListRevisions(packageName)
+		rrChan <- ftl.RevisionListResult{remoteRevisions, err}
+	}()
+
+	crResult := <-crChan
+	if crResult.Err != nil {
+		err = crResult.Err
+	} else {
+		curRev = crResult.Revisions[0]
+	}
+
+	prResult := <-prChan
+	if prResult.Err != nil {
+		err = prResult.Err
+	} else {
+		prevRev = prResult.Revisions[0]
+	}
+
+	rrResult := <-rrChan
+	if rrResult.Err != nil {
+		err = rrResult.Err
+	} else {
+		revisions = rrResult.Revisions
+	}
+
+	return
+}
+
+func downloadRemoteRevisions(r *ftl.RemoteRepository, l *ftl.LocalRepository, revisions []ftl.RevisionInfo) error {
+	workerChan := make(chan bool, DOWNLOAD_WORKERS)
+	for i := 0; i < DOWNLOAD_WORKERS; i++ {
+		workerChan <- true
+	}
+
+	downloadChan := make(chan error)
+	for _, rev := range revisions {
+		rev := rev
+		go func() {
+			<-workerChan
+			downloadChan <- downloadPackageRevision(r, l, rev)
+			workerChan <- true
+		}()
+	}
+
+	errList := make([]error, 0, len(revisions))
+	for _ = range revisions {
+		err := <-downloadChan
+		errList = append(errList, err)
+	}
+
+	for _, err := range errList {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 	for _, packageName := range local.ListPackages() {
-
 		err := local.CheckPackage(packageName)
 		if err != nil {
 			fmt.Println("Package initialize failed", err)
 			return err
 		}
 
-		crChan := make(chan ftl.RevisionListResult)
-		go func() {
-			currentRev, err := remote.GetCurrentRevision(packageName)
-			crChan <- ftl.RevisionListResult{[]ftl.RevisionInfo{currentRev}, err}
-		}()
-
-		crResult := <-crChan
-		if crResult.Err != nil {
-			return crResult.Err
-		}
-
-		currentRev := crResult.Revisions[0]
-
-		previousRev, err := remote.GetPreviousRevision(packageName)
+		curRev, prevRev, remoteRevisions, err := retrieveRemoteRevisions(remote, packageName)
 		if err != nil {
 			return err
 		}
 
-		firstRev := previousRev
-		if currentRev.Revision < firstRev.Revision {
-			firstRev = currentRev
+		firstRev := prevRev
+		if curRev.Revision < firstRev.Revision {
+			firstRev = curRev
 		}
 
 		localRevisions := local.ListRevisions(packageName)
-
-		remoteRevisions, err := remote.ListRevisions(packageName)
-		if err != nil {
-			return err
-		}
 
 		download, purge, err := syncPackage(remoteRevisions, localRevisions, firstRev)
 		if err != nil {
 			return err
 		}
 
-		for _, rev := range download {
-			err = downloadPackageRevision(remote, local, rev)
-			if err != nil {
-				return err
-			}
-		}
+		err = downloadRemoteRevisions(remote, local, download)
 
-		if len(currentRev.Revision) > 0 {
-			currentRev, err := remote.GetCurrentRevision(packageName)
-			if err != nil {
-				return fmt.Errorf("Failed to get Active Revision: %v", err)
-			}
-
-			err = local.Jump(currentRev)
+		if len(curRev.Revision) > 0 {
+			err = local.Jump(curRev)
 			if err != nil {
 				return err
 			}
@@ -196,7 +243,6 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 				return err
 			}
 		}
-
 	}
 	return nil
 }
