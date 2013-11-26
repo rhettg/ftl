@@ -141,21 +141,21 @@ func retrieveRemoteRevisions(r *ftl.RemoteRepository, packageName string) (curRe
 
 	crResult := <-crChan
 	if crResult.Err != nil {
-		err = crResult.Err
+		err = fmt.Errorf("Failed to retrieve current revision")
 	} else {
 		curRev = crResult.Revisions[0]
 	}
 
 	prResult := <-prChan
 	if prResult.Err != nil {
-		err = prResult.Err
+		err = fmt.Errorf("Failed to retrieve previous revision")
 	} else {
 		prevRev = prResult.Revisions[0]
 	}
 
 	rrResult := <-rrChan
 	if rrResult.Err != nil {
-		err = rrResult.Err
+		err = fmt.Errorf("Failed to retrieve remote revisions")
 	} else {
 		revisions = rrResult.Revisions
 	}
