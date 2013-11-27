@@ -221,7 +221,7 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 
 		err = downloadRemoteRevisions(remote, local, download)
 
-		if len(curRev.Revision) > 0 {
+		if curRev.Revision != "" {
 			err = local.Jump(curRev)
 			if err != nil {
 				return err
@@ -250,7 +250,7 @@ func listCmd(lr *ftl.LocalRepository, packageName string) {
 	activeRev := lr.GetCurrentRevision(packageName)
 
 	for _, revision := range lr.ListRevisions(packageName) {
-		if len(activeRev.Revision) > 0 && revision == activeRev {
+		if revision == activeRev {
 			fmt.Printf("%s\t(active)\n", revision.Name())
 		} else {
 			fmt.Println(revision.Name())
@@ -270,7 +270,7 @@ func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) error {
 	}
 
 	for _, revision := range revisionList {
-		if len(activeRev.Revision) > 0 && activeRev == revision {
+		if activeRev == revision {
 			fmt.Printf("%s\t(active)\n", revision.Name())
 		} else {
 			fmt.Println(revision.Name())
@@ -311,7 +311,7 @@ func main() {
 	}
 
 	ftlRootEnv := os.Getenv("FTL_ROOT")
-	if len(ftlRootEnv) == 0 {
+	if ftlRootEnv == "" {
 		optFail(fmt.Sprintf("FTL_ROOT not set"))
 	}
 	ftlRoot, err := filepath.Abs(ftlRootEnv)
@@ -325,7 +325,7 @@ func main() {
 	}
 
 	ftlBucketEnv := os.Getenv("FTL_BUCKET")
-	if len(ftlBucketEnv) == 0 {
+	if ftlBucketEnv == "" {
 		optFail(fmt.Sprintf("FTL_BUCKET not set"))
 	}
 
