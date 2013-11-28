@@ -245,7 +245,7 @@ func (lr *LocalRepository) Jump(revision RevisionInfo) (err error) {
 
 	currentLinkPath := lr.currentRevisionFilePath(revision.PackageName)
 	previousLinkPath := lr.previousRevisionFilePath(revision.PackageName)
-	if revision.Revision == "" {
+	if existingRevision.Revision != "" {
 		previousRevisionPath := filepath.Join(lr.BasePath, existingRevision.PackageName, "revs", existingRevision.Revision)
 		err = os.Remove(previousLinkPath)
 		if err != nil {
@@ -280,6 +280,7 @@ func (lr *LocalRepository) Jump(revision RevisionInfo) (err error) {
 	err = os.Symlink(newRevisionPath, currentLinkPath)
 	if err != nil {
 		fmt.Println("Failed creating symlink", err)
+		return
 	}
 
 	err = lr.RunPackageScript(revision, PKG_SCRIPT_POST_JUMP)
