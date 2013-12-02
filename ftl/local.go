@@ -27,7 +27,7 @@ type LocalRepository struct {
 type PackageScriptError struct {
 	WaitStatus syscall.WaitStatus
 	Script     string
-	Revision   RevisionInfo
+	Revision   *RevisionInfo
 }
 
 func (e *PackageScriptError) Error() string {
@@ -61,7 +61,7 @@ func (lr *LocalRepository) ListPackages() (packageNames []string) {
 	return
 }
 
-func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []RevisionInfo) {
+func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []*RevisionInfo) {
 	packagePath := filepath.Join(lr.BasePath, packageName, "revs")
 
 	packageFile, err := os.Open(packagePath)
@@ -96,7 +96,7 @@ func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []R
 	sort.Strings(localRevisionNames)
 
 	for _, revisionName := range localRevisionNames {
-		localRevisions = append(localRevisions, RevisionInfo{packageName, revisionName})
+		localRevisions = append(localRevisions, &RevisionInfo{packageName, revisionName})
 	}
 
 	return
@@ -126,20 +126,28 @@ func revisionFromLinkPath(packageName, revisionLinkPath string) (revisionName st
 	return
 }
 
-func (lr *LocalRepository) GetCurrentRevision(packageName string) RevisionInfo {
+func (lr *LocalRepository) GetCurrentRevision(packageName string) *RevisionInfo {
 	currentFilePath := lr.currentRevisionFilePath(packageName)
 	revisionName := revisionFromLinkPath(packageName, currentFilePath)
 
-	return *NewRevisionInfo(revisionName)
+	if revisionName != "" {
+		return NewRevisionInfo(revisionName)
+	} else {
+		return nil
+	}
 }
 
-func (lr *LocalRepository) GetPreviousRevision(packageName string) RevisionInfo {
+func (lr *LocalRepository) GetPreviousRevision(packageName string) *RevisionInfo {
 	previousFilePath := lr.previousRevisionFilePath(packageName)
 	revisionName := revisionFromLinkPath(packageName, previousFilePath)
-	return RevisionInfo{packageName, revisionName}
+	if revisionName != "" {
+		return &RevisionInfo{packageName, revisionName}
+	} else {
+		return nil
+	}
 }
 
-func (lr *LocalRepository) Add(revision RevisionInfo, fileName string, r io.Reader) (err error) {
+func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Reader) (err error) {
 	revisionPath := filepath.Join(lr.BasePath, revision.PackageName, "revs", revision.Revision)
 	fmt.Println("Adding", revisionPath)
 
@@ -207,9 +215,9 @@ func (lr *LocalRepository) Add(revision RevisionInfo, fileName string, r io.Read
 	return
 }
 
-func (lr *LocalRepository) Remove(revision RevisionInfo) error {
+func (lr *LocalRepository) Remove(revision *RevisionInfo) error {
 	activeRevision := lr.GetCurrentRevision(revision.PackageName)
-	if activeRevision == revision {
+	if activeRevision != nil && *activeRevision == *revision {
 		return fmt.Errorf("Can't remove active revision")
 	}
 
@@ -222,9 +230,44 @@ func (lr *LocalRepository) Remove(revision RevisionInfo) error {
 	return nil
 }
 
-func (lr *LocalRepository) Jump(revision RevisionInfo) (err error) {
+func (lr *LocalRepository) SetPreviousJump(revision *RevisionInfo) (err error) {
+	existingRevision := lr.GetPreviousRevision(revision.PackageName)
+	if existingRevision != nil && *existingRevision == *revision {
+		// Already set
+		return
+	}
+
+	newRevisionPath := filepath.Join(lr.BasePath, revision.PackageName, "revs", revision.Revision)
+	_, err = os.Stat(newRevisionPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Revision doesn't exist")
+			return
+		}
+	}
+
+	previousLinkPath := lr.previousRevisionFilePath(revision.PackageName)
+
+	err = os.Remove(previousLinkPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			fmt.Println("Failed to remove old previous")
+			return
+		}
+	}
+
+	err = os.Symlink(newRevisionPath, previousLinkPath)
+	if err != nil {
+		fmt.Println("Failed creating symlink", err)
+		return
+	}
+
+	return
+}
+
+func (lr *LocalRepository) Jump(revision *RevisionInfo) (err error) {
 	existingRevision := lr.GetCurrentRevision(revision.PackageName)
-	if existingRevision == revision {
+	if existingRevision != nil && *existingRevision == *revision {
 		// Already active
 		return
 	}
@@ -244,24 +287,13 @@ func (lr *LocalRepository) Jump(revision RevisionInfo) (err error) {
 	}
 
 	currentLinkPath := lr.currentRevisionFilePath(revision.PackageName)
-	previousLinkPath := lr.previousRevisionFilePath(revision.PackageName)
-	if existingRevision.Revision != "" {
-		previousRevisionPath := filepath.Join(lr.BasePath, existingRevision.PackageName, "revs", existingRevision.Revision)
-		err = os.Remove(previousLinkPath)
+	if existingRevision != nil {
+		err = lr.RunPackageScript(existingRevision, PKG_SCRIPT_UN_JUMP)
 		if err != nil {
-			if !os.IsNotExist(err) {
-				fmt.Println("Failed to remove old previous")
-				return
-			}
-		}
-
-		err = os.Symlink(previousRevisionPath, previousLinkPath)
-		if err != nil {
-			fmt.Println("Failed creating symlink", err)
 			return
 		}
 
-		err = lr.RunPackageScript(existingRevision, PKG_SCRIPT_UN_JUMP)
+		err = lr.SetPreviousJump(existingRevision)
 		if err != nil {
 			return
 		}
@@ -389,7 +421,7 @@ func (lr *LocalRepository) CheckPackage(packageName string) (err error) {
 	return
 }
 
-func (lr *LocalRepository) RunPackageScript(revision RevisionInfo, scriptName string) (err error) {
+func (lr *LocalRepository) RunPackageScript(revision *RevisionInfo, scriptName string) (err error) {
 	cwd, _ := os.Getwd()
 	defer os.Chdir(cwd)
 

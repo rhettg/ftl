@@ -39,7 +39,7 @@ func NewRemoteRepository(name string, auth aws.Auth, region aws.Region) (remote 
 	return &RemoteRepository{bucket}
 }
 
-func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []RevisionInfo, err error) {
+func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*RevisionInfo, err error) {
 	listResp, err := rr.bucket.List(packageName+".", ".", "", 1000)
 	if err != nil {
 		fmt.Println("Failed listing", err)
@@ -48,7 +48,7 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []Re
 
 	for _, prefix := range listResp.CommonPrefixes {
 		revisionName := prefix[:len(prefix)-1]
-		revision := *NewRevisionInfo(revisionName)
+		revision := NewRevisionInfo(revisionName)
 		revisionList = append(revisionList, revision)
 	}
 
@@ -58,7 +58,8 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []Re
 func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 	listResp, e := rr.bucket.List("", ".", "", 1000)
 	if e != nil {
-		err = fmt.Errorf("Failed listing: %v", err)
+		err = fmt.Errorf("Failed listing: %v", e)
+		return
 	}
 
 	for _, prefix := range listResp.CommonPrefixes {
@@ -67,7 +68,7 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 	return
 }
 
-func (rr *RemoteRepository) GetRevisionReader(revision RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
+func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
 	listResp, err := rr.bucket.List(revision.Name(), "", "", 1)
 	if err != nil {
 		fmt.Println("Failed listing", err)
@@ -82,7 +83,7 @@ func (rr *RemoteRepository) GetRevisionReader(revision RevisionInfo) (fileName s
 	return
 }
 
-func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision RevisionInfo, err error) {
+func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision *RevisionInfo, err error) {
 	statInfo, err := file.Stat()
 	if err != nil {
 		fmt.Println("Error stating file", err)
@@ -95,7 +96,7 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision R
 		return
 	}
 
-	revision = RevisionInfo{packageName, revisionId}
+	revision = &RevisionInfo{packageName, revisionId}
 
 	fileName := statInfo.Name()
 	nameBase := fileName[:strings.Index(fileName, ".")]
@@ -140,7 +141,7 @@ func (rr *RemoteRepository) revisionFromPath(revisionFilePath string) (revisionN
 	return
 }
 
-func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision RevisionInfo, err error) {
+func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision *RevisionInfo, err error) {
 	revFile := rr.currentRevisionFilePath(packageName)
 	revisionName, err := rr.revisionFromPath(revFile)
 	if err != nil {
@@ -167,27 +168,27 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision Rev
 	}
 
 	if revisionName != "" {
-		revision = *NewRevisionInfo(revisionName)
+		revision = NewRevisionInfo(revisionName)
 	}
 
 	return
 }
 
-func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision RevisionInfo, err error) {
+func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision *RevisionInfo, err error) {
 	revFile := rr.previousRevisionFilePath(packageName)
 	revisionName, err := rr.revisionFromPath(revFile)
 	if err != nil {
 		return
 	}
 
-	if revisionName == "" {
-		revision = *NewRevisionInfo(revisionName)
+	if revisionName != "" {
+		revision = NewRevisionInfo(revisionName)
 	}
 
 	return
 }
 
-func (rr *RemoteRepository) Jump(revision RevisionInfo) error {
+func (rr *RemoteRepository) Jump(revision *RevisionInfo) error {
 	currentRevision, err := rr.GetCurrentRevision(revision.PackageName)
 	if err != nil {
 		return err
@@ -248,7 +249,7 @@ func (rr *RemoteRepository) JumpBack(packageName string) error {
 	return nil
 }
 
-func (rr *RemoteRepository) PurgeRevision(revision RevisionInfo) (err error) {
+func (rr *RemoteRepository) PurgeRevision(revision *RevisionInfo) (err error) {
 	activeRevision, err := rr.GetCurrentRevision(revision.PackageName)
 	if err != nil {
 		return
