@@ -37,7 +37,7 @@ func (ri *RevisionInfo) Name() string {
 }
 
 type RevisionListResult struct {
-	Revisions []RevisionInfo
+	Revisions []*RevisionInfo
 	Err       error
 }
 
