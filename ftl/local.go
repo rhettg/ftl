@@ -132,9 +132,9 @@ func (lr *LocalRepository) GetCurrentRevision(packageName string) *RevisionInfo 
 
 	if revisionName != "" {
 		return NewRevisionInfo(revisionName)
-	} else {
-		return nil
 	}
+
+	return nil
 }
 
 func (lr *LocalRepository) GetPreviousRevision(packageName string) *RevisionInfo {
@@ -142,9 +142,9 @@ func (lr *LocalRepository) GetPreviousRevision(packageName string) *RevisionInfo
 	revisionName := revisionFromLinkPath(packageName, previousFilePath)
 	if revisionName != "" {
 		return &RevisionInfo{packageName, revisionName}
-	} else {
-		return nil
 	}
+
+	return nil
 }
 
 func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Reader) (err error) {
