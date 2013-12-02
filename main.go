@@ -13,7 +13,7 @@ import (
 
 const DOWNLOAD_WORKERS = 4
 
-const Version = "0.2.2"
+const Version = "0.2.3"
 
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 	"output verbosely", "be quiet, instead")
@@ -92,7 +92,11 @@ func syncPackage(remoteRevisions, localRevisions []*ftl.RevisionInfo, startRev *
 			done = true
 		case remoteNdx >= len(remoteRevisions):
 			// We have more local revisions, than remote... hmm
-			done = true
+			purgeRevs = append(purgeRevs, localRevisions[localNdx])
+			localNdx++
+		case localNdx < len(localRevisions) && remoteRevisions[remoteNdx].Revision == localRevisions[localNdx].Revision:
+			remoteNdx++
+			localNdx++
 		case startRev != nil && remoteRevisions[remoteNdx].Revision < startRev.Revision:
 			// To early for us, carry on
 			remoteNdx++
@@ -100,9 +104,6 @@ func syncPackage(remoteRevisions, localRevisions []*ftl.RevisionInfo, startRev *
 			// We have more remote revisions than local, just download what's left
 			downloadRevs = append(downloadRevs, remoteRevisions[remoteNdx])
 			remoteNdx++
-		case remoteRevisions[remoteNdx].Revision == localRevisions[localNdx].Revision:
-			remoteNdx++
-			localNdx++
 		case remoteRevisions[remoteNdx].Revision < localRevisions[localNdx].Revision:
 			// We have a new remote revision, download it
 			downloadRevs = append(downloadRevs, remoteRevisions[remoteNdx])
