@@ -1,3 +1,9 @@
+ftl (0.2.2)
+
+  * Fix a bug with empty syncs
+
+-- Rhett Garber <rhettg@gmail.com>  Mon, 2 Dec 2013 15:26:00 -0800
+
 ftl (0.2.1)
 
   * Fix a bug with cleaning up symlinks during jump

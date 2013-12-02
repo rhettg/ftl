@@ -13,7 +13,7 @@ import (
 
 const DOWNLOAD_WORKERS = 4
 
-const Version = "0.2.1"
+const Version = "0.2.2"
 
 var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
 	"output verbosely", "be quiet, instead")
