@@ -20,7 +20,7 @@ func buildRevisionId(file *os.File) (revisionId string, err error) {
 
 	now := time.Now().UTC()
 	hour, min, sec := now.Clock()
-	timeStamp := fmt.Sprintf("%s%d", now.Format("20060102"), hour*60*60+min*60+sec)
+	timeStamp := fmt.Sprintf("%s%05d", now.Format("20060102"), hour*60*60+min*60+sec)
 
 	// We're using pieces of our encoding data:
 	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)

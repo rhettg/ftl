@@ -1,3 +1,9 @@
+ftl (0.2.4)
+
+  * Fix revision formatting to avoid bad sorts on time.
+
+-- Rhett Garber <rhettg@gmail.com>  Wed, 29 Jan 2013 19:17:00 -0800
+
 ftl (0.2.3)
 
   * Don't purge local revisions just because they are behind previous
