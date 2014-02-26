@@ -1,8 +1,14 @@
+ftl (0.2.5)
+
+  * Fix crash when doing initial master jump
+
+-- Rhett Garber <rhettg@gmail.com>  Wed, 26 Feb 2014 15:02:00 -0800
+
 ftl (0.2.4)
 
   * Fix revision formatting to avoid bad sorts on time.
 
--- Rhett Garber <rhettg@gmail.com>  Wed, 29 Jan 2013 19:17:00 -0800
+-- Rhett Garber <rhettg@gmail.com>  Wed, 29 Jan 2014 19:17:00 -0800
 
 ftl (0.2.3)
 

@@ -199,11 +199,13 @@ func (rr *RemoteRepository) Jump(revision *RevisionInfo) error {
 		return nil
 	}
 
-	previousFilePath := rr.previousRevisionFilePath(revision.PackageName)
-	err = rr.bucket.Put(previousFilePath, []byte(currentRevision.Name()), "text/plain", s3.Private)
-	if err != nil {
-		return fmt.Errorf("Failed to put previous rev file: %v", err)
-	}
+    if (currentRevision != nil) {
+        previousFilePath := rr.previousRevisionFilePath(revision.PackageName)
+        err = rr.bucket.Put(previousFilePath, []byte(currentRevision.Name()), "text/plain", s3.Private)
+        if err != nil {
+            return fmt.Errorf("Failed to put previous rev file: %v", err)
+        }
+    }
 
 	currentFilePath := rr.currentRevisionFilePath(revision.PackageName)
 	err = rr.bucket.Put(currentFilePath, []byte(revision.Name()), "text/plain", s3.Private)
