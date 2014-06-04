@@ -102,7 +102,11 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision *
 	nameBase := fileName[:strings.Index(fileName, ".")]
 
 	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, fileName[strings.Index(fileName, ".")+1:])
-	rr.bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
+	err = rr.bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
+	if err != nil {
+		fmt.Println("Failed to PUT revision:", err)
+		return
+	}
 	return
 }
 
