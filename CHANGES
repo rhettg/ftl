@@ -1,3 +1,9 @@
+ftl (0.2.6)
+
+  * S3 Errors during spool were ignored
+
+-- Rhett Garber <rhettg@gmail.com>  Tue, 10 Jun 2014 10:48:00 -0700
+
 ftl (0.2.5)
 
   * Fix crash when doing initial master jump
