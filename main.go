@@ -5,7 +5,7 @@ import "os"
 
 import (
 	goopt "github.com/droundy/goopt"
-	"github.com/rhettg/ftl/ftl"
+	"github.com/postmates/ftl/ftl"
 	"launchpad.net/goamz/aws"
 	"path/filepath"
 	"strings"
