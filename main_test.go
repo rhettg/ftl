@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/rhettg/ftl/ftl"
+	"github.com/postmates/ftl/ftl"
 	"testing"
 )
 
