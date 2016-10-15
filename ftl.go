@@ -1,46 +1,22 @@
 package main
 
-import "fmt"
-import "os"
-
 import (
-	goopt "github.com/droundy/goopt"
-	"github.com/rhettg/ftl/ftl"
-	"launchpad.net/goamz/aws"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/urfave/cli"
+
+	"github.com/rhettg/ftl/ftl"
 )
 
 const DOWNLOAD_WORKERS = 4
 
-const Version = "0.2.6"
-
-var amVerbose = goopt.Flag([]string{"-v", "--verbose"}, []string{"--quiet"},
-	"output verbosely", "be quiet, instead")
-
-var amMaster = goopt.Flag([]string{"--master"}, nil, "Execute against master repository", "")
-
-var amVersion = goopt.Flag([]string{"--version"}, nil, "Display current version", "")
-
-func optToRegion(regionName string) (region aws.Region) {
-	region = aws.USEast
-
-	switch regionName {
-	case "us-east":
-		region = aws.USEast
-	case "us-west-1":
-		region = aws.USWest
-	case "us-west-2":
-		region = aws.USWest2
-	}
-	return
-}
-
-func optFail(message string) {
-	fmt.Println(message)
-	fmt.Print(goopt.Help())
-	os.Exit(1)
-}
+const Version = "0.3.0"
 
 func spoolCmd(rr *ftl.RemoteRepository, fileName string) error {
 	file, err := os.Open(fileName)
@@ -307,125 +283,190 @@ func listRemotePackagesCmd(remote *ftl.RemoteRepository) error {
 	return nil
 }
 
-func main() {
-	goopt.Description = func() string {
-		return "Faster Than Light Deploy System"
-	}
-	goopt.Version = Version
-	goopt.Summary = "Deploy system built around S3."
-	goopt.Parse(nil)
-
-	if *amVersion {
-		fmt.Println(Version)
-		os.Exit(0)
-	}
-
-	ftlRootEnv := os.Getenv("FTL_ROOT")
-	if ftlRootEnv == "" {
-		optFail(fmt.Sprintf("FTL_ROOT not set"))
-	}
-	ftlRoot, err := filepath.Abs(ftlRootEnv)
-	if err != nil {
-		optFail("Invalid FTL_ROOT")
-	}
-
-	auth, err := aws.EnvAuth()
-	if err != nil {
-		optFail(fmt.Sprintf("AWS error: %s", err))
-	}
-
-	ftlBucketEnv := os.Getenv("FTL_BUCKET")
-	if ftlBucketEnv == "" {
-		optFail(fmt.Sprintf("FTL_BUCKET not set"))
-	}
-
-	remote := ftl.NewRemoteRepository(ftlBucketEnv, auth, optToRegion(os.Getenv("AWS_DEFAULT_REGION")))
-	local := ftl.NewLocalRepository(ftlRoot)
-
-	if len(goopt.Args) > 0 {
-		cmd := strings.TrimSpace(goopt.Args[0])
-		switch cmd {
-		case "spool":
-			if len(goopt.Args) > 1 {
-				fileName := strings.TrimSpace(goopt.Args[1])
-				fullPath, e := filepath.Abs(fileName)
-				if e != nil {
-					optFail("Unable to parse path")
-				}
-
-				err = spoolCmd(remote, fullPath)
-			} else {
-				optFail("Missing file name")
-			}
-		case "jump":
-			if len(goopt.Args) > 1 {
-				revision := ftl.NewRevisionInfo(strings.TrimSpace(goopt.Args[1]))
-
-				if revision == nil {
-					optFail("Invalid revision name")
-				} else if *amMaster {
-					err = remote.Jump(revision)
-				} else {
-					err = local.Jump(revision)
-				}
-			} else {
-				optFail("Jump where?")
-			}
-		case "jump-back":
-			if len(goopt.Args) > 1 {
-				pkgName := strings.TrimSpace(goopt.Args[1])
-				if *amMaster {
-					err = remote.JumpBack(pkgName)
-				} else {
-					err = local.JumpBack(pkgName)
-				}
-			} else {
-				optFail("Package name required")
-			}
-		case "list":
-			if len(goopt.Args) > 1 {
-				if *amMaster {
-					err = listRemoteCmd(remote, strings.TrimSpace(goopt.Args[1]))
-				} else {
-					listCmd(local, strings.TrimSpace(goopt.Args[1]))
-				}
-			} else {
-				if *amMaster {
-					err = listRemotePackagesCmd(remote)
-				} else {
-					listPackagesCmd(local)
-				}
-			}
-		case "sync":
-			err = syncCmd(remote, local)
-		case "purge":
-			if len(goopt.Args) < 2 {
-				optFail("Must specify revision to purge")
-			}
-
-			revision := ftl.NewRevisionInfo(strings.TrimSpace(goopt.Args[1]))
-			if revision == nil {
-				optFail("Invalid revision name")
-			} else if *amMaster {
-				err = remote.PurgeRevision(revision)
-			} else {
-				optFail("I only know how to purge master")
-			}
-
-		default:
-			optFail(fmt.Sprintf("Invalid command: %s", cmd))
-		}
+// Translate PackageScriptErrors into command line errors so we get the
+// correct exit status
+func capturePackageScriptError(err error) error {
+	if pse, ok := err.(*ftl.PackageScriptError); ok {
+		return cli.NewExitError(pse.Error(), pse.WaitStatus.ExitStatus())
 	} else {
-		optFail("Nothing to do")
+		return err
 	}
+}
 
+func newRemoteRepository(c *cli.Context) (remote ftl.RemoteRepository, err error) {
+	sess := session.New(&aws.Config{Region: c.String("aws-region")})
+	remote := ftl.NewRemoteRepository(sess)
+}
+
+func newLocalRepository(c *cli.Context) (local ftl.LocalRepository, err error) {
+	ftlRoot, err := filepath.Abs(c.String("ftl-root"))
 	if err != nil {
-		fmt.Println(err)
-
-		if pse, ok := err.(*ftl.PackageScriptError); ok {
-			os.Exit(pse.WaitStatus.ExitStatus())
-		} else {
-			os.Exit(1)
-		}
+		return
 	}
+	local := ftl.NewLocalRepository(ftlRoot)
+}
+
+func main() {
+	app := cli.NewApp()
+	app.Name = "ftl"
+	app.Usage = "Faster Than Light Deploy System"
+	app.Version = Version
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:   "ftl-root",
+			Usage:  "Path to local repository",
+			EnvVar: "FTL_ROOT",
+		},
+		cli.StringFlag{
+			Name:   "ftl-bucket",
+			Usage:  "S3 Bucket for remote repository",
+			EnvVar: "FTL_BUCKET",
+		},
+		cli.StringFlag{
+			Name:   "aws-region",
+			Usage:  "AWS Region for S3 Bucket",
+			EnvVar: "AWS_DEFAULT_REGION",
+		},
+	}
+
+	executeRemoteFlag := cli.BoolFlag{
+		Name:  "master, remote",
+		Usage: "Execute against remote revision repository",
+	}
+
+	app.Commands = []cli.Command{
+		{
+			Name:    "spool",
+			Aliases: []string{"s"},
+			Usage:   "",
+			Flags:   []cli.Flag{},
+			Action: func(c *cli.Context) error {
+				if c.NArg() > 0 {
+					fileName := c.Args().First()
+					fullPath, e := filepath.Abs(fileName)
+					if e != nil {
+						return cli.NewExitError("Unable to parse path", 1)
+					}
+
+					remote := newRemoteRepository(c)
+					return spoolCmd(remote, fullPath)
+				} else {
+					return cli.NewExitError("Missing file name", 1)
+				}
+			},
+		},
+		{
+			Name:    "jump",
+			Aliases: []string{"j"},
+			Usage:   "Activate the specified revision",
+			Flags:   []cli.Flag{executeRemoteFlag},
+			Action: func(c *cli.Context) error {
+				if c.NArg() > 0 {
+					revision := ftl.NewRevisionInfo(c.Args().First())
+
+					if revision == nil {
+						return cli.NewExitError("Invalid revision name", 1)
+					} else if c.Bool("remote") {
+
+						remote := newRemoteRepository(c)
+						err := remote.Jump(revision)
+					} else {
+						local := newLocalRepository(c)
+						err := local.Jump(revision)
+					}
+				} else {
+					return cli.NewExitError("Jump where?", 1)
+				}
+				return capturePackageScriptError(err)
+			},
+		},
+		{
+			Name:    "jump-back",
+			Aliases: []string{"b"},
+			Usage:   "Activate the previous revision",
+			Flags:   []cli.Flag{executeRemoteFlag},
+			Action: func(c *cli.Context) error {
+				if c.NArg() > 0 {
+					pkgName := c.Args().First()
+					if c.Bool("remote") {
+						remote := newRemoteRepository(c)
+
+						err := remote.JumpBack(pkgName)
+					} else {
+						local := newLocalRepository(c)
+						err := local.JumpBack(pkgName)
+					}
+				} else {
+					return cli.NewExitError("Package name required", 1)
+				}
+				return capturePackageScriptError(err)
+			},
+		},
+		{
+			Name:    "list",
+			Aliases: []string{"l"},
+			Usage:   "List available revisions",
+			Flags:   []cli.Flag{executeRemoteFlag},
+			Action: func(c *cli.Context) error {
+				var remote ftl.RemoteRepository
+				var local ftl.LocalRepository
+				if c.Bool("remote") {
+					remote := newRemoteRepository(c)
+				} else {
+					local := newLocalRepository(c)
+				}
+
+				if c.NArg() > 0 {
+					if c.Bool("remote") {
+						return listRemoteCmd(remote, c.Args().First())
+					} else {
+						listCmd(local, c.Args().First())
+					}
+				} else {
+					if c.Bool("remote") {
+						return listRemotePackagesCmd(remote)
+					} else {
+						listPackagesCmd(local)
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Name:    "sync",
+			Aliases: []string{"s"},
+			Usage:   "",
+			Flags:   []cli.Flag{},
+			Action: func(c *cli.Context) error {
+				remote := newRemoteRepository(c)
+				local := newLocalRepository(c)
+
+				err := syncCmd(remote, local)
+				return capturePackageScriptError(err)
+			},
+		},
+		{
+			Name:    "purge",
+			Aliases: []string{"p"},
+			Usage:   "",
+			Flags:   []cli.Flag{},
+			Action: func(c *cli.Context) error {
+				if c.NArg() == 0 {
+					return cli.NewExitError("Must specify revision to purge", 1)
+				}
+
+				revision := ftl.NewRevisionInfo(c.Args().First())
+				if revision == nil {
+					return cli.NewExitError("Package name required", 1)
+				} else if c.Bool("remote") {
+					remote := newRemoteRepository(c)
+					return remote.PurgeRevision(revision)
+				} else {
+					return cli.NewExitError("I only know how to purge master", 1)
+				}
+			},
+		},
+	}
+
+	app.Run(os.Args)
 }
