@@ -3,9 +3,9 @@ package ftl
 import (
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/service/s3"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"io"
-	"launchpad.net/goamz/aws"
-	"launchpad.net/goamz/s3"
 	"os"
 	"strings"
 	"time"
@@ -30,13 +30,13 @@ func buildRevisionId(file *os.File) (revisionId string, err error) {
 }
 
 type RemoteRepository struct {
-	bucket *s3.Bucket
+	svc        *s3.Service
+	bucketName String
 }
 
-func NewRemoteRepository(name string, auth aws.Auth, region aws.Region) (remote *RemoteRepository) {
-	myS3 := s3.New(auth, region)
-	bucket := myS3.Bucket(name)
-	return &RemoteRepository{bucket}
+func NewRemoteRepository(bucketName string, sess session.Session) (remote *RemoteRepository) {
+	svc := s3.New(sess)
+	return &RemoteRepository{svc, bucketName}
 }
 
 func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*RevisionInfo, err error) {
@@ -56,6 +56,14 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*R
 }
 
 func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
+
+	err := rr.svc.ListObjectsV2Pages(params,
+		func(page *ListObjectsV2Output, lastPage bool) bool {
+			pageNum++
+			fmt.Println(page)
+			return true
+		})
+
 	listResp, e := rr.bucket.List("", ".", "", 1000)
 	if e != nil {
 		err = fmt.Errorf("Failed listing: %v", e)

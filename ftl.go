@@ -6,9 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/urfave/cli"
 
 	"github.com/rhettg/ftl/ftl"
@@ -294,8 +292,8 @@ func capturePackageScriptError(err error) error {
 }
 
 func newRemoteRepository(c *cli.Context) (remote ftl.RemoteRepository, err error) {
-	sess := session.New(&aws.Config{Region: c.String("aws-region")})
-	remote := ftl.NewRemoteRepository(sess)
+	s := session.New(&aws.Config{Region: c.String("aws-region")})
+	remote := ftl.NewRemoteRepository(c.String("ftl-bucket"), s)
 }
 
 func newLocalRepository(c *cli.Context) (local ftl.LocalRepository, err error) {
