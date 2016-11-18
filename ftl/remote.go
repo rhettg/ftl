@@ -3,8 +3,8 @@ package ftl
 import (
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/service/s3"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"io"
 	"os"
 	"strings"
@@ -30,62 +30,84 @@ func buildRevisionId(file *os.File) (revisionId string, err error) {
 }
 
 type RemoteRepository struct {
-	svc        *s3.Service
-	bucketName String
+	svc        *s3.S3
+	bucketName string
 }
 
-func NewRemoteRepository(bucketName string, sess session.Session) (remote *RemoteRepository) {
+func NewRemoteRepository(bucketName string, sess *session.Session) (remote *RemoteRepository) {
 	svc := s3.New(sess)
 	return &RemoteRepository{svc, bucketName}
 }
 
 func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*RevisionInfo, err error) {
-	listResp, err := rr.bucket.List(packageName+".", ".", "", 1000)
+	err := svc.ListObjectsPages(
+		&s3.ListObjectsInput{
+			Bucket:    aws.String(rr.bucket),
+			Prefix:    aws.String(packageName + "."),
+			Delimiter: aws.String("."),
+		},
+		func(p *s3.ListObjectsOutput, lastPage bool) bool {
+			for _, prefix := range p.CommonPrefixes {
+				revisionName := prefix[:len(prefix)-1]
+				revision := NewRevisionInfo(revisionName)
+				revisionList = append(revisionList, revision)
+			}
+
+			return true
+		})
+
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return
-	}
-
-	for _, prefix := range listResp.CommonPrefixes {
-		revisionName := prefix[:len(prefix)-1]
-		revision := NewRevisionInfo(revisionName)
-		revisionList = append(revisionList, revision)
 	}
 
 	return
 }
 
 func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
+	err := svc.ListObjectsPages(
+		&s3.ListObjectsInput{
+			Bucket:    aws.String(rr.bucket),
+			Prefix:    aws.String(""),
+			Delimiter: aws.String("."),
+		},
+		func(p *s3.ListObjectsOutput, lastPage bool) bool {
+			for _, prefix := range p.CommonPrefixes {
+				pkgs = append(pkgs, prefix[:len(prefix)-1])
+			}
 
-	err := rr.svc.ListObjectsV2Pages(params,
-		func(page *ListObjectsV2Output, lastPage bool) bool {
-			pageNum++
-			fmt.Println(page)
 			return true
 		})
 
-	listResp, e := rr.bucket.List("", ".", "", 1000)
-	if e != nil {
+	if err != nil {
 		err = fmt.Errorf("Failed listing: %v", e)
 		return
 	}
 
-	for _, prefix := range listResp.CommonPrefixes {
-		pkgs = append(pkgs, prefix[:len(prefix)-1])
-	}
 	return
 }
 
+// TODO: I think this needs to deal with files on disk rather than readers.
 func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
-	listResp, err := rr.bucket.List(revision.Name(), "", "", 1)
+	listRep, err := svc.ListObjects(
+		&s3.ListObjectsInput{
+			Bucket:    aws.String(revision.Name()),
+			Prefix:    aws.String(""),
+			Delimiter: aws.String(""),
+		})
+
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		return
 	}
 
 	if len(listResp.Contents) > 0 {
-		fileName = listResp.Contents[0].Key
-		reader, err = rr.bucket.GetReader(fileName)
+		fileName = *listResp.Contents[0].Key
+		o, err = svc.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(rr.bucket),
+			Key:    listResp.Contents[0].Key})
+
+		reader = o.Body
 	}
 
 	return
