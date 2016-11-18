@@ -3,9 +3,12 @@ package ftl
 import (
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -40,14 +43,15 @@ func NewRemoteRepository(bucketName string, sess *session.Session) (remote *Remo
 }
 
 func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*RevisionInfo, err error) {
-	err := svc.ListObjectsPages(
+	err = rr.svc.ListObjectsPages(
 		&s3.ListObjectsInput{
-			Bucket:    aws.String(rr.bucket),
+			Bucket:    aws.String(rr.bucketName),
 			Prefix:    aws.String(packageName + "."),
 			Delimiter: aws.String("."),
 		},
 		func(p *s3.ListObjectsOutput, lastPage bool) bool {
-			for _, prefix := range p.CommonPrefixes {
+			for _, cp := range p.CommonPrefixes {
+				prefix := aws.StringValue(cp.Prefix)
 				revisionName := prefix[:len(prefix)-1]
 				revision := NewRevisionInfo(revisionName)
 				revisionList = append(revisionList, revision)
@@ -65,14 +69,15 @@ func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*R
 }
 
 func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
-	err := svc.ListObjectsPages(
+	err = rr.svc.ListObjectsPages(
 		&s3.ListObjectsInput{
-			Bucket:    aws.String(rr.bucket),
+			Bucket:    aws.String(rr.bucketName),
 			Prefix:    aws.String(""),
 			Delimiter: aws.String("."),
 		},
 		func(p *s3.ListObjectsOutput, lastPage bool) bool {
-			for _, prefix := range p.CommonPrefixes {
+			for _, cp := range p.CommonPrefixes {
+				prefix := aws.StringValue(cp.Prefix)
 				pkgs = append(pkgs, prefix[:len(prefix)-1])
 			}
 
@@ -80,7 +85,7 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 		})
 
 	if err != nil {
-		err = fmt.Errorf("Failed listing: %v", e)
+		err = fmt.Errorf("Failed listing: %v", err)
 		return
 	}
 
@@ -89,7 +94,7 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 
 // TODO: I think this needs to deal with files on disk rather than readers.
 func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
-	listRep, err := svc.ListObjects(
+	listResp, err := rr.svc.ListObjects(
 		&s3.ListObjectsInput{
 			Bucket:    aws.String(revision.Name()),
 			Prefix:    aws.String(""),
@@ -103,10 +108,14 @@ func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName 
 
 	if len(listResp.Contents) > 0 {
 		fileName = *listResp.Contents[0].Key
-		o, err = svc.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(rr.bucket),
+		var o *s3.GetObjectOutput
+		o, err = rr.svc.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(rr.bucketName),
 			Key:    listResp.Contents[0].Key})
 
+		if err != nil {
+			return
+		}
 		reader = o.Body
 	}
 
@@ -132,7 +141,15 @@ func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision *
 	nameBase := fileName[:strings.Index(fileName, ".")]
 
 	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, fileName[strings.Index(fileName, ".")+1:])
-	err = rr.bucket.PutReader(s3Path, file, statInfo.Size(), "application/octet-stream", s3.Private)
+	_, err = rr.svc.PutObject(&s3.PutObjectInput{
+		ACL:           aws.String("private"),
+		ContentType:   aws.String("application/octet-stream"),
+		ContentLength: aws.Int64(statInfo.Size()),
+		Bucket:        aws.String(rr.bucketName),
+		Key:           aws.String(s3Path),
+		Body:          file,
+	})
+
 	if err != nil {
 		fmt.Println("Failed to PUT revision:", err)
 		return
@@ -156,13 +173,17 @@ func (rr *RemoteRepository) previousRevisionFilePath(packageName string) (revisi
 }
 
 func (rr *RemoteRepository) revisionFromPath(revisionFilePath string) (revisionName string, err error) {
-	data, err := rr.bucket.Get(revisionFilePath)
+	o, err := rr.svc.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(rr.bucketName),
+		Key:    aws.String(revisionFilePath),
+	})
+
 	if err != nil {
-		s3Error, _ := err.(*s3.Error)
+		s3Error, _ := err.(awserr.Error)
 		if s3Error == nil {
 			err = fmt.Errorf("Error retrieving revision, no error")
 			return
-		} else if s3Error.StatusCode == 404 {
+		} else if s3Error.Code() == "NoSuchKey" {
 			err = nil
 			return
 		} else {
@@ -171,7 +192,11 @@ func (rr *RemoteRepository) revisionFromPath(revisionFilePath string) (revisionN
 		}
 	}
 
-	revisionName = string(data)
+	b, err := ioutil.ReadAll(o.Body)
+	if err != nil {
+		return
+	}
+	revisionName = string(b)
 	return
 }
 
@@ -191,13 +216,15 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision *Re
 
 		if revisionName == "" {
 			// This was the old way to name this file, let's port us to the new way:
-			err = rr.bucket.Put(revFile, []byte(revisionName), "text/plain", s3.Private)
+			err = rr.putRevisionFile(revFile, revisionName)
 			if err != nil {
-				err = fmt.Errorf("Failed to put new current rev file: %v", err)
 				return
 			}
 
-			rr.bucket.Del(oldRevFile)
+			rr.svc.DeleteObject(&s3.DeleteObjectInput{
+				Bucket: aws.String(rr.bucketName),
+				Key:    aws.String(oldRevFile),
+			})
 		}
 	}
 
@@ -205,6 +232,22 @@ func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision *Re
 		revision = NewRevisionInfo(revisionName)
 	}
 
+	return
+}
+
+func (rr *RemoteRepository) putRevisionFile(key string, revision string) (err error) {
+	_, err = rr.svc.PutObject(&s3.PutObjectInput{
+		ACL:         aws.String("private"),
+		ContentType: aws.String("text/plan"),
+		Bucket:      aws.String(rr.bucketName),
+		Key:         aws.String(key),
+		Body:        strings.NewReader(revision),
+	})
+
+	if err != nil {
+		err = fmt.Errorf("Failed to put new current rev file: %v", err)
+		return
+	}
 	return
 }
 
@@ -235,14 +278,14 @@ func (rr *RemoteRepository) Jump(revision *RevisionInfo) error {
 
 	if currentRevision != nil {
 		previousFilePath := rr.previousRevisionFilePath(revision.PackageName)
-		err = rr.bucket.Put(previousFilePath, []byte(currentRevision.Name()), "text/plain", s3.Private)
+		err = rr.putRevisionFile(previousFilePath, currentRevision.Name())
 		if err != nil {
-			return fmt.Errorf("Failed to put previous rev file: %v", err)
+			return err
 		}
 	}
 
 	currentFilePath := rr.currentRevisionFilePath(revision.PackageName)
-	err = rr.bucket.Put(currentFilePath, []byte(revision.Name()), "text/plain", s3.Private)
+	err = rr.putRevisionFile(currentFilePath, revision.Name())
 	if err != nil {
 		return fmt.Errorf("Failed to put rev file: %v", err)
 	}
@@ -272,12 +315,12 @@ func (rr *RemoteRepository) JumpBack(packageName string) error {
 		return fmt.Errorf("Failed to find current revision")
 	}
 
-	err = rr.bucket.Put(previousFilePath, []byte(currentRevision), "text/plain", s3.Private)
+	err = rr.putRevisionFile(previousFilePath, currentRevision)
 	if err != nil {
 		return fmt.Errorf("Failed to put previous rev file: %v", err)
 	}
 
-	err = rr.bucket.Put(currentFilePath, []byte(previousRevision), "text/plain", s3.Private)
+	err = rr.putRevisionFile(currentFilePath, previousRevision)
 	if err != nil {
 		return fmt.Errorf("Failed to put current rev file: %v", err)
 	}
@@ -296,7 +339,13 @@ func (rr *RemoteRepository) PurgeRevision(revision *RevisionInfo) (err error) {
 		return
 	}
 
-	listResp, err := rr.bucket.List(revision.Name()+".", "/", "", 1)
+	listResp, err := rr.svc.ListObjects(
+		&s3.ListObjectsInput{
+			Bucket:    aws.String(rr.bucketName),
+			Prefix:    aws.String(revision.Name() + "."),
+			Delimiter: aws.String("/"),
+		})
+
 	if err != nil {
 		fmt.Println("Failed listing", err)
 		err = fmt.Errorf("Failed listing %v", err)
@@ -304,7 +353,7 @@ func (rr *RemoteRepository) PurgeRevision(revision *RevisionInfo) (err error) {
 	}
 
 	if len(listResp.Contents) > 0 {
-		err = rr.bucket.Del(listResp.Contents[0].Key)
+		_, err := rr.svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(rr.bucketName), Key: listResp.Contents[0].Key})
 		if err != nil {
 			fmt.Printf("Failed to remove", err)
 			err = fmt.Errorf("Failed to do s3 Del: %v", err)

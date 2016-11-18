@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/urfave/cli"
 
@@ -291,17 +292,19 @@ func capturePackageScriptError(err error) error {
 	}
 }
 
-func newRemoteRepository(c *cli.Context) (remote ftl.RemoteRepository, err error) {
-	s := session.New(&aws.Config{Region: c.String("aws-region")})
-	remote := ftl.NewRemoteRepository(c.String("ftl-bucket"), s)
+func newRemoteRepository(c *cli.Context) (remote *ftl.RemoteRepository) {
+	s := session.New(&aws.Config{Region: aws.String(c.String("aws-region"))})
+	remote = ftl.NewRemoteRepository(c.String("ftl-bucket"), s)
+	return
 }
 
-func newLocalRepository(c *cli.Context) (local ftl.LocalRepository, err error) {
+func newLocalRepository(c *cli.Context) (local *ftl.LocalRepository, err error) {
 	ftlRoot, err := filepath.Abs(c.String("ftl-root"))
 	if err != nil {
 		return
 	}
-	local := ftl.NewLocalRepository(ftlRoot)
+	local = ftl.NewLocalRepository(ftlRoot)
+	return
 }
 
 func main() {
@@ -331,6 +334,10 @@ func main() {
 		Name:  "master, remote",
 		Usage: "Execute against remote revision repository",
 	}
+
+	var err error
+	var remote *ftl.RemoteRepository
+	var local *ftl.LocalRepository
 
 	app.Commands = []cli.Command{
 		{
@@ -367,10 +374,13 @@ func main() {
 					} else if c.Bool("remote") {
 
 						remote := newRemoteRepository(c)
-						err := remote.Jump(revision)
+						err = remote.Jump(revision)
 					} else {
-						local := newLocalRepository(c)
-						err := local.Jump(revision)
+						local, err = newLocalRepository(c)
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+						err = local.Jump(revision)
 					}
 				} else {
 					return cli.NewExitError("Jump where?", 1)
@@ -389,10 +399,14 @@ func main() {
 					if c.Bool("remote") {
 						remote := newRemoteRepository(c)
 
-						err := remote.JumpBack(pkgName)
+						err = remote.JumpBack(pkgName)
 					} else {
-						local := newLocalRepository(c)
-						err := local.JumpBack(pkgName)
+						local, err = newLocalRepository(c)
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+
+						err = local.JumpBack(pkgName)
 					}
 				} else {
 					return cli.NewExitError("Package name required", 1)
@@ -406,12 +420,13 @@ func main() {
 			Usage:   "List available revisions",
 			Flags:   []cli.Flag{executeRemoteFlag},
 			Action: func(c *cli.Context) error {
-				var remote ftl.RemoteRepository
-				var local ftl.LocalRepository
 				if c.Bool("remote") {
-					remote := newRemoteRepository(c)
+					remote = newRemoteRepository(c)
 				} else {
-					local := newLocalRepository(c)
+					local, err = newLocalRepository(c)
+					if err != nil {
+						return cli.NewExitError(err.Error(), 1)
+					}
 				}
 
 				if c.NArg() > 0 {
@@ -437,9 +452,12 @@ func main() {
 			Flags:   []cli.Flag{},
 			Action: func(c *cli.Context) error {
 				remote := newRemoteRepository(c)
-				local := newLocalRepository(c)
+				local, err = newLocalRepository(c)
+				if err != nil {
+					return cli.NewExitError(err.Error(), 1)
+				}
 
-				err := syncCmd(remote, local)
+				err = syncCmd(remote, local)
 				return capturePackageScriptError(err)
 			},
 		},
