@@ -310,7 +310,6 @@ func newRemoteRepository(c *cli.Context) (remote *ftl.RemoteRepository, err erro
 }
 
 func newLocalRepository(c *cli.Context) (local *ftl.LocalRepository, err error) {
-	fmt.Println(c.String("ftl-root"))
 	if len(c.String("ftl-root")) == 0 {
 		err = errors.New("FTL_ROOT not set")
 		return
