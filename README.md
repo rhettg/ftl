@@ -34,7 +34,7 @@ Use SSH to kick all your servers to get the new revision
 Activate the new revision
 
     $ <ssh all> ftl jump my_site.054aR4G0L
-    $ ftl jump --master my_site.054aR4G0L
+    $ ftl jump --remote my_site.054aR4G0L
 
 
 Commands
@@ -43,12 +43,12 @@ Commands
     ftl spool <package_name>.tar.gz    # Upload new revision
     ftl list                           # List available packages
     ftl list <package name>            # List available revisions for the package
-    ftl list --master <package name>   # List available revisions for the package on the remote repository (S3)
+    ftl list --remote <package name>   # List available revisions for the package on the remote repository (S3)
     ftl sync                           # Check S3 for new stuff to do (new revisions, remove revisions, bless)
     ftl jump <rev name>                # Activate the specified revision
     ftl jump-back <package name>       # Activiate the previous revision
-    ftl jump --master <rev name>       # Mark the revision blessed in S3 (only needs to be done by one node)
-    ftl purge --master <rev name>      # Remove the specified revision.
+    ftl jump --remote <rev name>       # Mark the revision blessed in S3 (only needs to be done by one node)
+    ftl purge --remote <rev name>      # Remove the specified revision.
 
 
 Installation and Setup
@@ -78,8 +78,9 @@ Your current version of the package will be accesssed as:
 
     /var/opt/deploy/my_site/current/<file name>
 
-FTL needs access to whatever S3 Bucket you have chosen. Similiar to command line AWS/S3/EC2 tools, 
-FTL needs access to environment variables that provide credentials.
+FTL needs access to the configured S3 Bucket. FTL can make use of AWS
+credentials similarly to standard command line AWS tools. You can rely on
+instance IAM profiles or provide environment variables like:
 
     AWS_SECRET_ACCESS_KEY=<secret>
     AWS_ACCESS_KEY_ID=<key>
@@ -88,30 +89,17 @@ If your `FTL_BUCKET` is not in the the standard us-east region, you can specify 
 
     AWS_DEFAULT_REGION=us-west-2
 
-This is easy to do for your deployment system, as you can just add them to your
-`.profile` or similiar. For production machines, it can be more complicated.  A
-system we've found to work well is to have a set of separate set of keys for
-your deployed systems, stored in flat files with permissions just for your
-deploy user (or perhaps application).
-
-Then create a file like `/etc/profile.d/aws.sh` with the contents:
-
-    AWS_SECRET_ACCESS_KEY=`cat /etc/aws.secret`
-    AWS_ACCESS_KEY_ID=`cat /etc/aws.key`
-	
-Keep in mind that you'll need to be executing `ftl` from within a normal bash
-environment. If using `sudo`, you might find `sudo -E` to be useful.
-
 Deployment Package
 -----
 
-Package names are inferred from the file name that you spool. It's whatever
-string up till the first `.` character.
+Package names are inferred from the spooled file name, extracting the string up to the first `.`.
 
-The file can be anything, but there is special handling for `.tar`, `.gz` and `.tgz` files.
-For these, we'll unzip and untar them into the revision directory for you.
+The file can be of any format, but there is special handling for `.tar`, `.gz`
+and `.tgz` files.  For these, we'll unzip and/or untar them into the revision
+directory for you.
 
-In addition, if specially named scripts are provided in the tar file, we'll run them at the specified steps in the deployment.
+In addition, if specially named scripts are provided in the tar file, we'll run
+them at the specified steps in the deployment.
 
   * `post-sync.sh`
   * `pre-jump.sh`
@@ -139,8 +127,21 @@ Deploy Directory Layout
 S3 Layout
 -----
     <package_name>.fhsdjf.tar.gz   # Specific revision
-    <package_name>.rev             # Active revision name 
+    <package_name>.rev             # Active revision name
 
+
+Development
+------
+
+There are two types of testing available:
+
+  * Unit tests provided via standard `go test`
+	* Integration tests written in bash as scripts in the `tests` directory
+
+To run integration tests, you'll need a real live S3 bucket. This bucket must
+be empty. You can run all the tests via the Makefile:
+
+    $ make full-test
 
 Todo
 ------
@@ -148,10 +149,7 @@ Todo
   1. Environment variables for package scripts
   1. Fixup logging
   1. Output capture and annotate rather than echo for package scripts
-  1. Remove older revisions (commands 'remove' and 'clean')
   1. Lock file
-  1. Parallelize sync operations
-
 
 License
 -------

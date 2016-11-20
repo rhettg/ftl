@@ -12,6 +12,9 @@ clean:
 build/ftl: build
 	go build -o build/ftl .
 
-test: build/ftl
+test:
+	go test .
+
+full-test: test build/ftl
 	mkdir -p test-root
 	FTL=build/ftl FTL_ROOT=test-root run-parts --regex=\d*_.*.sh --exit-on-error tests

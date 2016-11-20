@@ -1,3 +1,11 @@
+ftl (0.3.0)
+
+  * Modernize aws usage by converting to aws-sdk-go
+	* Enhanced command line options by converting to urfave/cli
+	* Integration testing using assert.sh
+
+-- Rhett Garber <rhettg@gmail.com>  Tue, 10 Jun 2014 10:48:00 -0700
+
 ftl (0.2.6)
 
   * S3 Errors during spool were ignored
