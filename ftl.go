@@ -39,6 +39,15 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) error {
 	return nil
 }
 
+func spoolRemoteCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revision *ftl.RevisionInfo) (err error) {
+	fmt.Println("downloading")
+	err = downloadPackageRevision(remote, local, revision)
+	if err == nil {
+		fmt.Println(revision.Name())
+	}
+	return
+}
+
 func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revision *ftl.RevisionInfo) error {
 	fileName, r, err := remote.GetRevisionReader(revision)
 	if err != nil {
@@ -366,19 +375,37 @@ func main() {
 			},
 			Action: func(c *cli.Context) error {
 				if c.NArg() > 0 {
-					fileName := c.Args().First()
-					fullPath, e := filepath.Abs(fileName)
-					if e != nil {
-						return cli.NewExitError("Unable to parse path", 1)
-					}
-
-					remote, err := newRemoteRepository(c)
+					remote, err = newRemoteRepository(c)
 					if err != nil {
 						return cli.NewExitError(err.Error(), 1)
 					}
-					return spoolCmd(remote, fullPath)
+
+					if c.Bool("remote") {
+						revision := ftl.NewRevisionInfo(c.Args().First())
+
+						local, err = newLocalRepository(c)
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+
+						return spoolRemoteCmd(remote, local, revision)
+
+					} else {
+						fileName := c.Args().First()
+						fullPath, e := filepath.Abs(fileName)
+						if e != nil {
+							return cli.NewExitError("Unable to parse path", 1)
+						}
+
+						remote, err = newRemoteRepository(c)
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+
+						return spoolCmd(remote, fullPath)
+					}
 				} else {
-					return cli.NewExitError("Missing file name", 1)
+					return cli.NewExitError("Missing file name or revision", 1)
 				}
 			},
 		},
@@ -399,7 +426,6 @@ func main() {
 					if revision == nil {
 						return cli.NewExitError("Invalid revision name", 1)
 					} else if c.Bool("remote") {
-
 						remote, err = newRemoteRepository(c)
 						if err != nil {
 							return cli.NewExitError(err.Error(), 1)

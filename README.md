@@ -41,6 +41,7 @@ Commands
 ----
 
     ftl spool <package_name>.tar.gz    # Upload new revision
+    ftl spool --remote <rev name>      # Download a specific revision
     ftl list                           # List available packages
     ftl list <package name>            # List available revisions for the package
     ftl list --remote <package name>   # List available revisions for the package on the remote repository (S3)

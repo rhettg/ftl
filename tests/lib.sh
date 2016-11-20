@@ -31,18 +31,13 @@ setup () {
     exit 1
   fi
 
-  if [[ "$(ls -A $FTL_ROOT | wc -l)" -ne 0 ]]; then
-    echo "safety error, non-empty root $FTL_ROOT"
-    exit 1
-  fi
-
+  export FTL_ROOT="${TMP_DIR}/ftl"
+  mkdir "$FTL_ROOT"
   trap "cleanup" EXIT
 }
 
 cleanup () {
   aws s3 rm --quiet --recursive s3://$FTL_BUCKET
-  test -n "$FTL_ROOT" || exit 1  # just cause i'm scared
-  rm -rf "$FTL_ROOT/*" 2>&1 > /dev/null
 
   test -n "$TMP_DIR" || exit 1  # just cause i'm scared
   rm -rf "$TMP_DIR"
