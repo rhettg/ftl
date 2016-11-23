@@ -9,7 +9,7 @@ clean:
 	rm -rf build
 	rm -rf test-root
 
-build/ftl: build
+build/ftl: build ftl.go ftl/*.go
 	go build -o build/ftl .
 
 test:

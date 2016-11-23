@@ -151,7 +151,7 @@ func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Rea
 	revisionPath := filepath.Join(lr.BasePath, revision.PackageName, "revs", revision.Revision)
 	fmt.Println("Adding", revisionPath)
 
-	err = os.Mkdir(revisionPath, 0755)
+	err = os.MkdirAll(revisionPath, 0755)
 	if err != nil {
 		return
 	}

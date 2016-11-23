@@ -96,8 +96,8 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
 	listResp, err := rr.svc.ListObjects(
 		&s3.ListObjectsInput{
-			Bucket:    aws.String(revision.Name()),
-			Prefix:    aws.String(""),
+			Bucket:    aws.String(rr.bucketName),
+			Prefix:    aws.String(revision.Name()),
 			Delimiter: aws.String(""),
 		})
 

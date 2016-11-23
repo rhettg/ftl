@@ -40,7 +40,6 @@ func spoolCmd(rr *ftl.RemoteRepository, fileName string) error {
 }
 
 func spoolRemoteCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revision *ftl.RevisionInfo) (err error) {
-	fmt.Println("downloading")
 	err = downloadPackageRevision(remote, local, revision)
 	if err == nil {
 		fmt.Println(revision.Name())
@@ -369,6 +368,7 @@ func main() {
 			Aliases: []string{"s"},
 			Usage:   "",
 			Flags: []cli.Flag{
+				rootFlag,
 				bucketFlag,
 				regionFlag,
 				executeRemoteFlag,
@@ -388,8 +388,11 @@ func main() {
 							return cli.NewExitError(err.Error(), 1)
 						}
 
-						return spoolRemoteCmd(remote, local, revision)
-
+						err = spoolRemoteCmd(remote, local, revision)
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+						return nil
 					} else {
 						fileName := c.Args().First()
 						fullPath, e := filepath.Abs(fileName)
