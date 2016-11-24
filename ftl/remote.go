@@ -3,34 +3,17 @@ package ftl
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"io"
-	"io/ioutil"
-	"os"
-	"strings"
-	"time"
 )
-
-func buildRevisionId(file *os.File) (revisionId string, err error) {
-	// Revsion id will be based on a combination of encoding timestamp and sha1 of the file.
-	hashPrefix, err := fileHashPrefix(file)
-	if err != nil {
-		return
-	}
-
-	now := time.Now().UTC()
-	hour, min, sec := now.Clock()
-	timeStamp := fmt.Sprintf("%s%05d", now.Format("20060102"), hour*60*60+min*60+sec)
-
-	// We're using pieces of our encoding data:
-	//  * for our timestamp, we're stripping off all but one of the heading zeros which is encoded as a dash. Also, the last = (buffer)
-	//  * For our hash, we're only using 2 bytes
-	revisionId = fmt.Sprintf("%s%s", timeStamp, hashPrefix)
-	return
-}
 
 type RemoteRepository struct {
 	svc        *s3.S3
@@ -42,7 +25,7 @@ func NewRemoteRepository(bucketName string, sess *session.Session) (remote *Remo
 	return &RemoteRepository{svc, bucketName}
 }
 
-func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []*RevisionInfo, err error) {
+func (rr *RemoteRepository) ListRevisions(packageName string) (revisionList []RevisionInfo, err error) {
 	err = rr.svc.ListObjectsPages(
 		&s3.ListObjectsInput{
 			Bucket:    aws.String(rr.bucketName),
@@ -93,7 +76,7 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 }
 
 // TODO: I think this needs to deal with files on disk rather than readers.
-func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
+func (rr *RemoteRepository) GetRevisionReader(revision RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
 	listResp, err := rr.svc.ListObjects(
 		&s3.ListObjectsInput{
 			Bucket:    aws.String(rr.bucketName),
@@ -122,25 +105,22 @@ func (rr *RemoteRepository) GetRevisionReader(revision *RevisionInfo) (fileName 
 	return
 }
 
-func (rr *RemoteRepository) Spool(packageName string, file *os.File) (revision *RevisionInfo, err error) {
+func (rr *RemoteRepository) Add(ri RevisionInfo, filePath string) (err error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("Failed to open file: %s", err.Error())
+	}
+
 	statInfo, err := file.Stat()
 	if err != nil {
-		fmt.Println("Error stating file", err)
-		return
+		return fmt.Errorf("Error stat'ing file: %s", err.Error())
 	}
 
-	revisionId, err := buildRevisionId(file)
-	if err != nil {
-		fmt.Println("Failed to build revision id")
-		return
-	}
-
-	revision = &RevisionInfo{packageName, revisionId}
-
-	fileName := statInfo.Name()
+	fileName := filepath.Base(filePath)
 	nameBase := fileName[:strings.Index(fileName, ".")]
 
-	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, revisionId, fileName[strings.Index(fileName, ".")+1:])
+	// TODO: Use an uploader now that we have a file
+	s3Path := fmt.Sprintf("%s.%s.%s", nameBase, ri.Revision, fileName[strings.Index(fileName, ".")+1:])
 	_, err = rr.svc.PutObject(&s3.PutObjectInput{
 		ACL:           aws.String("private"),
 		ContentType:   aws.String("application/octet-stream"),
@@ -200,7 +180,7 @@ func (rr *RemoteRepository) revisionFromPath(revisionFilePath string) (revisionN
 	return
 }
 
-func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision *RevisionInfo, err error) {
+func (rr *RemoteRepository) GetCurrentRevision(packageName string) (revision RevisionInfo, err error) {
 	revFile := rr.currentRevisionFilePath(packageName)
 	revisionName, err := rr.revisionFromPath(revFile)
 	if err != nil {
@@ -251,7 +231,7 @@ func (rr *RemoteRepository) putRevisionFile(key string, revision string) (err er
 	return
 }
 
-func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision *RevisionInfo, err error) {
+func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision RevisionInfo, err error) {
 	revFile := rr.previousRevisionFilePath(packageName)
 	revisionName, err := rr.revisionFromPath(revFile)
 	if err != nil {
@@ -265,7 +245,7 @@ func (rr *RemoteRepository) GetPreviousRevision(packageName string) (revision *R
 	return
 }
 
-func (rr *RemoteRepository) Jump(revision *RevisionInfo) error {
+func (rr *RemoteRepository) Jump(revision RevisionInfo) error {
 	currentRevision, err := rr.GetCurrentRevision(revision.PackageName)
 	if err != nil {
 		return err
@@ -276,7 +256,7 @@ func (rr *RemoteRepository) Jump(revision *RevisionInfo) error {
 		return nil
 	}
 
-	if currentRevision != nil {
+	if currentRevision.Revision != "" {
 		previousFilePath := rr.previousRevisionFilePath(revision.PackageName)
 		err = rr.putRevisionFile(previousFilePath, currentRevision.Name())
 		if err != nil {
@@ -328,7 +308,7 @@ func (rr *RemoteRepository) JumpBack(packageName string) error {
 	return nil
 }
 
-func (rr *RemoteRepository) PurgeRevision(revision *RevisionInfo) (err error) {
+func (rr *RemoteRepository) PurgeRevision(revision RevisionInfo) (err error) {
 	activeRevision, err := rr.GetCurrentRevision(revision.PackageName)
 	if err != nil {
 		return

@@ -6,19 +6,19 @@ import (
 )
 
 func Test_syncPackage_downNone(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
+	rr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 		{"test", "003"},
 	}
 
-	lr := []*ftl.RevisionInfo{
+	lr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 		{"test", "003"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, &ftl.RevisionInfo{"test", "001"})
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -32,15 +32,15 @@ func Test_syncPackage_downNone(t *testing.T) {
 }
 
 func Test_syncPackage_downSome(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
+	rr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 		{"test", "003"},
 	}
 
-	lr := []*ftl.RevisionInfo{}
+	lr := []ftl.RevisionInfo{}
 
-	download, purge, err := syncPackage(rr, lr, &ftl.RevisionInfo{"test", "002"})
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "002"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -59,17 +59,17 @@ func Test_syncPackage_downSome(t *testing.T) {
 }
 
 func Test_syncPackage_downMore(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
+	rr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 		{"test", "003"},
 	}
 
-	lr := []*ftl.RevisionInfo{
+	lr := []ftl.RevisionInfo{
 		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, &ftl.RevisionInfo{"test", "001"})
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -88,17 +88,17 @@ func Test_syncPackage_downMore(t *testing.T) {
 }
 
 func Test_syncPackage_downMoreLimit(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
+	rr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 		{"test", "003"},
 	}
 
-	lr := []*ftl.RevisionInfo{
+	lr := []ftl.RevisionInfo{
 		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, &ftl.RevisionInfo{"test", "002"})
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "002"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -117,17 +117,17 @@ func Test_syncPackage_downMoreLimit(t *testing.T) {
 }
 
 func Test_syncPackage_purgeNone(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
+	rr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 	}
 
-	lr := []*ftl.RevisionInfo{
+	lr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, &ftl.RevisionInfo{"test", "002"})
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "002"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -142,16 +142,16 @@ func Test_syncPackage_purgeNone(t *testing.T) {
 }
 
 func Test_syncPackage_purgeOne(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
+	rr := []ftl.RevisionInfo{
 		{"test", "002"},
 	}
 
-	lr := []*ftl.RevisionInfo{
+	lr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, &ftl.RevisionInfo{"test", "001"})
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{"test", "001"})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}
@@ -170,15 +170,14 @@ func Test_syncPackage_purgeOne(t *testing.T) {
 }
 
 func Test_syncPackage_purgeAll(t *testing.T) {
-	rr := []*ftl.RevisionInfo{
-	}
+	rr := []ftl.RevisionInfo{}
 
-	lr := []*ftl.RevisionInfo{
+	lr := []ftl.RevisionInfo{
 		{"test", "001"},
 		{"test", "002"},
 	}
 
-	download, purge, err := syncPackage(rr, lr, nil)
+	download, purge, err := syncPackage(rr, lr, ftl.RevisionInfo{})
 	if err != nil {
 		t.Error("Error from syncPackage", err)
 	}

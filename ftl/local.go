@@ -27,7 +27,7 @@ type LocalRepository struct {
 type PackageScriptError struct {
 	WaitStatus syscall.WaitStatus
 	Script     string
-	Revision   *RevisionInfo
+	Revision   RevisionInfo
 }
 
 func (e *PackageScriptError) Error() string {
@@ -61,7 +61,7 @@ func (lr *LocalRepository) ListPackages() (packageNames []string) {
 	return
 }
 
-func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []*RevisionInfo) {
+func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []RevisionInfo) {
 	packagePath := filepath.Join(lr.BasePath, packageName, "revs")
 
 	packageFile, err := os.Open(packagePath)
@@ -96,7 +96,7 @@ func (lr *LocalRepository) ListRevisions(packageName string) (localRevisions []*
 	sort.Strings(localRevisionNames)
 
 	for _, revisionName := range localRevisionNames {
-		localRevisions = append(localRevisions, &RevisionInfo{packageName, revisionName})
+		localRevisions = append(localRevisions, RevisionInfo{packageName, revisionName})
 	}
 
 	return
@@ -126,7 +126,7 @@ func revisionFromLinkPath(packageName, revisionLinkPath string) (revisionName st
 	return
 }
 
-func (lr *LocalRepository) GetCurrentRevision(packageName string) *RevisionInfo {
+func (lr *LocalRepository) GetCurrentRevision(packageName string) RevisionInfo {
 	currentFilePath := lr.currentRevisionFilePath(packageName)
 	revisionName := revisionFromLinkPath(packageName, currentFilePath)
 
@@ -134,42 +134,50 @@ func (lr *LocalRepository) GetCurrentRevision(packageName string) *RevisionInfo 
 		return NewRevisionInfo(revisionName)
 	}
 
-	return nil
+	return RevisionInfo{PackageName: packageName, Revision: ""}
 }
 
-func (lr *LocalRepository) GetPreviousRevision(packageName string) *RevisionInfo {
+func (lr *LocalRepository) GetPreviousRevision(packageName string) RevisionInfo {
 	previousFilePath := lr.previousRevisionFilePath(packageName)
 	revisionName := revisionFromLinkPath(packageName, previousFilePath)
 	if revisionName != "" {
-		return &RevisionInfo{packageName, revisionName}
+		return RevisionInfo{packageName, revisionName}
 	}
 
-	return nil
+	return RevisionInfo{PackageName: packageName, Revision: ""}
 }
 
-func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Reader) (err error) {
-	revisionPath := filepath.Join(lr.BasePath, revision.PackageName, "revs", revision.Revision)
-	fmt.Println("Adding", revisionPath)
-
-	err = os.MkdirAll(revisionPath, 0755)
+func copyFile(srcFilePath, destFilePath string) (err error) {
+	w, err := os.Create(destFilePath)
 	if err != nil {
 		return
 	}
-
-	revisionFilePath := filepath.Join(revisionPath, fileName)
-	w, err := os.Create(revisionFilePath)
-	if err != nil {
-		return
-	}
-
 	defer w.Close()
+
+	r, err := os.Open(srcFilePath)
+	if err != nil {
+		return
+	}
+	defer r.Close()
 
 	_, err = io.Copy(w, r)
 	if err != nil {
 		return
 	}
 
-	w.Close()
+	return
+}
+
+func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err error) {
+	revisionPath := filepath.Join(lr.BasePath, revision.PackageName, "revs", revision.Revision)
+
+	err = os.MkdirAll(revisionPath, 0755)
+	if err != nil {
+		return
+	}
+
+	revisionFilePath := filepath.Join(revisionPath, filepath.Base(filePath))
+	err = copyFile(filePath, revisionFilePath)
 
 	checkFile, err := os.Open(revisionFilePath)
 	hashPrefix, err := fileHashPrefix(checkFile)
@@ -181,12 +189,11 @@ func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Rea
 		return fmt.Errorf("Checksum does not match")
 	}
 
-	if strings.HasSuffix(fileName, ".tgz") || strings.HasSuffix(fileName, ".gz") {
+	if strings.HasSuffix(filePath, ".tgz") || strings.HasSuffix(filePath, ".gz") {
 		cmd := exec.Command("gunzip", revisionFilePath)
 		err = cmd.Run()
 		if err != nil {
-			fmt.Println("Failed to unzip", err)
-			return
+			return fmt.Errorf("Failed to unzip: %s", err.Error())
 		}
 	}
 
@@ -197,13 +204,11 @@ func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Rea
 		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix+".tar")
 		err = cmd.Run()
 		if err != nil {
-			fmt.Println("Failed to untar", err)
-			return
+			return fmt.Errorf("Failed to untar: %s", err.Error())
 		}
 		err = os.Remove(revisionFilePrefix + ".tar")
 		if err != nil {
-			fmt.Println("Failed to cleanup", err)
-			return
+			return fmt.Errorf("Failed to cleanup: %s", err.Error())
 		}
 	}
 
@@ -215,9 +220,9 @@ func (lr *LocalRepository) Add(revision *RevisionInfo, fileName string, r io.Rea
 	return
 }
 
-func (lr *LocalRepository) Remove(revision *RevisionInfo) error {
+func (lr *LocalRepository) Remove(revision RevisionInfo) error {
 	activeRevision := lr.GetCurrentRevision(revision.PackageName)
-	if activeRevision != nil && *activeRevision == *revision {
+	if activeRevision.Revision != "" && activeRevision.Revision == revision.Revision {
 		return fmt.Errorf("Can't remove active revision")
 	}
 
@@ -230,9 +235,9 @@ func (lr *LocalRepository) Remove(revision *RevisionInfo) error {
 	return nil
 }
 
-func (lr *LocalRepository) SetPreviousJump(revision *RevisionInfo) (err error) {
+func (lr *LocalRepository) SetPreviousJump(revision RevisionInfo) (err error) {
 	existingRevision := lr.GetPreviousRevision(revision.PackageName)
-	if existingRevision != nil && *existingRevision == *revision {
+	if existingRevision.Revision != "" && existingRevision.Revision == revision.Revision {
 		// Already set
 		return
 	}
@@ -265,9 +270,9 @@ func (lr *LocalRepository) SetPreviousJump(revision *RevisionInfo) (err error) {
 	return
 }
 
-func (lr *LocalRepository) Jump(revision *RevisionInfo) (err error) {
+func (lr *LocalRepository) Jump(revision RevisionInfo) (err error) {
 	existingRevision := lr.GetCurrentRevision(revision.PackageName)
-	if existingRevision != nil && *existingRevision == *revision {
+	if existingRevision.Revision != "" && existingRevision.Revision == revision.Revision {
 		// Already active
 		return
 	}
@@ -287,7 +292,7 @@ func (lr *LocalRepository) Jump(revision *RevisionInfo) (err error) {
 	}
 
 	currentLinkPath := lr.currentRevisionFilePath(revision.PackageName)
-	if existingRevision != nil {
+	if existingRevision.Revision != "" {
 		err = lr.RunPackageScript(existingRevision, PKG_SCRIPT_UN_JUMP)
 		if err != nil {
 			return
@@ -421,7 +426,7 @@ func (lr *LocalRepository) CheckPackage(packageName string) (err error) {
 	return
 }
 
-func (lr *LocalRepository) RunPackageScript(revision *RevisionInfo, scriptName string) (err error) {
+func (lr *LocalRepository) RunPackageScript(revision RevisionInfo, scriptName string) (err error) {
 	cwd, _ := os.Getwd()
 	defer os.Chdir(cwd)
 

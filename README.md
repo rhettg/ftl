@@ -27,21 +27,38 @@ Create the new revision
     $ ftl spool my_site.tgz
     my_site.054aR4G0L
 
-Use SSH to kick all your servers to get the new revision
+Activate the new revision
 
-    $ <ssh all> ftl sync
+    $ ftl jump my_site.054aR4G0L
+
+The current revision of your application is now available via the symlink at `$FTL_ROOT/my_site/current/`
+
+
+Remote Example Usage
+----
+
+FTL get's really interesting when you start using S3 as a backing store.
+
+Create the new revision
+
+    $ tar -czf my_site.tgz src/*
+    $ ftl spool --remote my_site.tgz
+    my_site.054aR4G0L
 
 Activate the new revision
 
-    $ <ssh all> ftl jump my_site.054aR4G0L
     $ ftl jump --remote my_site.054aR4G0L
+
+Use SSH to kick all your servers to get the new revision
+
+    $ <ssh all> ftl sync
 
 
 Commands
 ----
 
-    ftl spool <package_name>.tar.gz    # Upload new revision
-    ftl spool --remote <rev name>      # Download a specific revision
+    ftl spool <package_name>.tar.gz    # Include new revision
+    ftl spool --remote <rev name>      # Upload new revision to S3
     ftl list                           # List available packages
     ftl list <package name>            # List available revisions for the package
     ftl list --remote <package name>   # List available revisions for the package on the remote repository (S3)
