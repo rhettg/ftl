@@ -417,7 +417,8 @@ func main() {
 				if c.NArg() > 0 {
 					revision := ftl.NewRevisionInfo(c.Args().First())
 
-					if revision.Valid() {
+					fmt.Println(revision)
+					if !revision.Valid() {
 						return cli.NewExitError("Invalid revision name", 1)
 					} else if c.Bool("remote") {
 						remote, err = newRemoteRepository(c)
@@ -550,7 +551,7 @@ func main() {
 				}
 
 				revision := ftl.NewRevisionInfo(c.Args().First())
-				if revision.Valid() {
+				if !revision.Valid() {
 					return cli.NewExitError("Package name required", 1)
 				} else if c.Bool("remote") {
 					remote, err = newRemoteRepository(c)

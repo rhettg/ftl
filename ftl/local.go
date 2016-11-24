@@ -189,7 +189,16 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 		return fmt.Errorf("Checksum does not match")
 	}
 
-	if strings.HasSuffix(filePath, ".tgz") || strings.HasSuffix(filePath, ".gz") {
+	fileName := filepath.Base(filePath)
+	dotNdx := strings.LastIndex(fileName, ".")
+	var fileBase string
+	if dotNdx >= 0 {
+		fileBase = fileName[0:dotNdx]
+	} else {
+		fileBase = fileName
+	}
+
+	if filepath.Ext(filePath) == ".tgz" || filepath.Ext(filePath) == ".gz" {
 		cmd := exec.Command("gunzip", revisionFilePath)
 		err = cmd.Run()
 		if err != nil {
@@ -197,8 +206,7 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 		}
 	}
 
-	revisionFilePrefix := filepath.Join(revisionPath, revision.Name())
-
+	revisionFilePrefix := filepath.Join(revisionPath, fileBase)
 	_, err = os.Stat(revisionFilePrefix + ".tar")
 	if err == nil {
 		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix+".tar")
