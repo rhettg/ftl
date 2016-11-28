@@ -1,8 +1,9 @@
 ftl (0.3.0)
 
+  * [BREAKING] Spool --remote option to enable fully local usage
   * Modernize aws usage by converting to aws-sdk-go
-	* Enhanced command line options by converting to urfave/cli
-	* Integration testing using assert.sh
+  * Enhanced command line options by converting to urfave/cli
+  * Integration testing using assert.sh
 
 -- Rhett Garber <rhettg@gmail.com>  Tue, 10 Jun 2014 10:48:00 -0700
 

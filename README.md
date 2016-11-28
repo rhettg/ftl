@@ -57,8 +57,8 @@ Use SSH to kick all your servers to get the new revision
 Commands
 ----
 
-    ftl spool <package_name>.tar.gz    # Include new revision
-    ftl spool --remote <rev name>      # Upload new revision to S3
+    ftl spool <package name>.tar.gz    # Include new revision into FTL_ROOT
+    ftl spool --remote <package name>.tar.gz      # Upload new revision to S3
     ftl list                           # List available packages
     ftl list <package name>            # List available revisions for the package
     ftl list --remote <package name>   # List available revisions for the package on the remote repository (S3)
@@ -72,40 +72,43 @@ Commands
 Installation and Setup
 -----
 
-Standard GO application installation:
+Standard Go application installation:
 
     $ go get github.com/rhettg/ftl
-    $ go install github.com/rhettg/ftl/main.go
+    $ go install github.com/rhettg/ftl
 
 FTL has no config files. It's entirely environment variable based.
 
-You'll need on each machine whenever FTL is run:
+At minimum, FTL will need to know where to store package revisions:
 
-    FTL_BUCKET=<S3 Bucket to use>
     FTL_ROOT=<deployment directory>
 
 This deployment directory will need a subdirectory for whatever packages your
-system should care about. So if you have a package amed `my_site`, your
+system should care about. So if you have a package named `my_site`, your
 deployment directory might look like:
 
-    /var/opt/deploy/
+    /var/ftl/
         my_site/
            .. empty ..
 
 Your current version of the package will be accesssed as:
 
-    /var/opt/deploy/my_site/current/<file name>
+    /var/ftl/my_site/current/<file name>
 
-FTL needs access to the configured S3 Bucket. FTL can make use of AWS
-credentials similarly to standard command line AWS tools. You can rely on
-instance IAM profiles or provide environment variables like:
+To use S3, FTL will also need a dedicated S3 Bucket:
 
-    AWS_SECRET_ACCESS_KEY=<secret>
-    AWS_ACCESS_KEY_ID=<key>
+    FTL_BUCKET=<s3 bucket name>
 
 If your `FTL_BUCKET` is not in the the standard us-east region, you can specify the region with:
 
     AWS_DEFAULT_REGION=us-west-2
+
+FTL can make use of AWS credentials similarly to standard command line AWS
+tools. You can rely on instance IAM profiles or provide environment variables
+like:
+
+    AWS_SECRET_ACCESS_KEY=<secret>
+    AWS_ACCESS_KEY_ID=<key>
 
 Deployment Package
 -----
@@ -144,8 +147,9 @@ Deploy Directory Layout
 
 S3 Layout
 -----
-    <package_name>.fhsdjf.tar.gz   # Specific revision
-    <package_name>.rev             # Active revision name
+
+    <package_name>.201611281234sdjf.tar.gz # Specific revision
+    <package_name>.rev                     # Active revision name
 
 
 Development
@@ -154,7 +158,7 @@ Development
 There are two types of testing available:
 
   * Unit tests provided via standard `go test`
-	* Integration tests written in bash as scripts in the `tests` directory
+  * Integration tests written in bash as scripts in the `tests` directory
 
 To run integration tests, you'll need a real live S3 bucket. This bucket must
 be empty. You can run all the tests via the Makefile:
@@ -171,6 +175,7 @@ Todo
 
 License
 -------
+
 ISC
 
 Copyright (c) 2014, Rhett Garber <rhettg@gmail.com>
