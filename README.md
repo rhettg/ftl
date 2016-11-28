@@ -171,7 +171,7 @@ Todo
   1. Environment variables for package scripts
   1. Fixup logging
   1. Output capture and annotate rather than echo for package scripts
-  1. Lock file
+  1. Consider S3/SNS integration for long-sync
 
 License
 -------

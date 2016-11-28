@@ -2,8 +2,8 @@
 
 set -e
 
-. tests/lib.sh
 . tests/assert.sh
+. tests/lib.sh
 
 setup
 

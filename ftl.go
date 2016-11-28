@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/nightlyone/lockfile"
 	"github.com/urfave/cli"
 
 	"github.com/rhettg/ftl/ftl"
@@ -328,6 +329,20 @@ func newLocalRepository(c *cli.Context) (local *ftl.LocalRepository, err error) 
 	return
 }
 
+func newLockFile(root string) (lockFile lockfile.Lockfile, err error) {
+	fileName := filepath.Join(root, ".lock")
+	lockFile, err = lockfile.New(fileName)
+	if err != nil {
+		return
+	}
+
+	err = lockFile.TryLock()
+	if err != nil {
+		err = fmt.Errorf("Failed to lock %s: %s", fileName, err.Error())
+	}
+	return
+}
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "ftl"
@@ -357,6 +372,7 @@ func main() {
 	var err error
 	var remote *ftl.RemoteRepository
 	var local *ftl.LocalRepository
+	var lockFile lockfile.Lockfile
 
 	app.Commands = []cli.Command{
 		{
@@ -398,6 +414,12 @@ func main() {
 							return cli.NewExitError(err.Error(), 1)
 						}
 
+						lockFile, err = newLockFile(c.String("ftl-root"))
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+						defer lockFile.Unlock()
+
 						err = spoolCmd(local, fullPath)
 						if err != nil {
 							return cli.NewExitError(err.Error(), 1)
@@ -438,6 +460,13 @@ func main() {
 						if err != nil {
 							return cli.NewExitError(err.Error(), 1)
 						}
+
+						lockFile, err = newLockFile(c.String("ftl-root"))
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+						defer lockFile.Unlock()
+
 						err = local.Jump(revision)
 					}
 				} else {
@@ -471,6 +500,12 @@ func main() {
 						if err != nil {
 							return cli.NewExitError(err.Error(), 1)
 						}
+
+						lockFile, err = newLockFile(c.String("ftl-root"))
+						if err != nil {
+							return cli.NewExitError(err.Error(), 1)
+						}
+						defer lockFile.Unlock()
 
 						err = local.JumpBack(pkgName)
 					}
@@ -538,6 +573,12 @@ func main() {
 				if err != nil {
 					return cli.NewExitError(err.Error(), 1)
 				}
+
+				lockFile, err = newLockFile(c.String("ftl-root"))
+				if err != nil {
+					return cli.NewExitError(err.Error(), 1)
+				}
+				defer lockFile.Unlock()
 
 				err = syncCmd(remote, local)
 				return capturePackageScriptError(err)

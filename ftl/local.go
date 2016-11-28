@@ -56,6 +56,10 @@ func (lr *LocalRepository) ListPackages() (packageNames []string) {
 	}
 
 	for _, fileInfo := range localPackages {
+		if strings.HasPrefix(fileInfo.Name(), ".") {
+			continue
+		}
+
 		packageNames = append(packageNames, fileInfo.Name())
 	}
 	return
