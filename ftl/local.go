@@ -177,9 +177,15 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 	}
 
 	revisionFilePath := filepath.Join(revisionPath, filepath.Base(filePath))
+
 	err = copyFile(filePath, revisionFilePath)
 
 	checkFile, err := os.Open(revisionFilePath)
+	if err != nil {
+		return
+	}
+	defer checkFile.Close()
+
 	hashPrefix, err := fileHashPrefix(checkFile)
 	if err != nil {
 		return
@@ -189,7 +195,16 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 		return fmt.Errorf("Checksum does not match")
 	}
 
-	fileName := filepath.Base(filePath)
+	if filepath.Ext(revisionFilePath) == ".gz" {
+		cmd := exec.Command("gunzip", revisionFilePath)
+		err = cmd.Run()
+		if err != nil {
+			return fmt.Errorf("Failed to unzip: %s", err.Error())
+		}
+		revisionFilePath = revisionFilePath[0 : len(revisionFilePath)-len(".gz")]
+	}
+
+	fileName := filepath.Base(revisionFilePath)
 	dotNdx := strings.LastIndex(fileName, ".")
 	var fileBase string
 	if dotNdx >= 0 {
@@ -198,15 +213,8 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 		fileBase = fileName
 	}
 
-	if filepath.Ext(filePath) == ".tgz" || filepath.Ext(filePath) == ".gz" {
-		cmd := exec.Command("gunzip", revisionFilePath)
-		err = cmd.Run()
-		if err != nil {
-			return fmt.Errorf("Failed to unzip: %s", err.Error())
-		}
-	}
-
 	revisionFilePrefix := filepath.Join(revisionPath, fileBase)
+
 	_, err = os.Stat(revisionFilePrefix + ".tar")
 	if err == nil {
 		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix+".tar")
@@ -215,6 +223,19 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 			return fmt.Errorf("Failed to untar: %s", err.Error())
 		}
 		err = os.Remove(revisionFilePrefix + ".tar")
+		if err != nil {
+			return fmt.Errorf("Failed to cleanup: %s", err.Error())
+		}
+	}
+
+	_, err = os.Stat(revisionFilePrefix + ".tgz")
+	if err == nil {
+		cmd := exec.Command("tar", "-C", revisionPath, "-xzf", revisionFilePrefix+".tgz")
+		err = cmd.Run()
+		if err != nil {
+			return fmt.Errorf("Failed to untar: %s", err.Error())
+		}
+		err = os.Remove(revisionFilePrefix + ".tgz")
 		if err != nil {
 			return fmt.Errorf("Failed to cleanup: %s", err.Error())
 		}
