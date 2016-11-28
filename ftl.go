@@ -37,15 +37,17 @@ func spoolCmd(r revisionAdder, filePath string) (err error) {
 }
 
 func downloadPackageRevision(remote *ftl.RemoteRepository, local *ftl.LocalRepository, revision ftl.RevisionInfo) error {
-	fileName, r, err := remote.GetRevisionReader(revision)
+	filePath, err := remote.GetRevision(revision)
 	if err != nil {
 		return fmt.Errorf("Failed listing: %v", err)
 	}
-	if r != nil {
-		defer r.Close()
-	}
 
-	err = local.Add(revision, fileName)
+	defer os.Remove(filePath)
+
+	// Because this is likely now an empty tmp file
+	defer os.Remove(filepath.Dir(filePath))
+
+	err = local.Add(revision, filePath)
 	if err != nil {
 		return fmt.Errorf("Failed adding %s: %v", revision.Name(), err)
 	}
@@ -158,7 +160,7 @@ func downloadRemoteRevisions(r *ftl.RemoteRepository, l *ftl.LocalRepository, re
 
 	for _, err := range errList {
 		if err != nil {
-			return fmt.Errorf("Failed downloading revisions")
+			return fmt.Errorf("Failed downloading revisions: " + err.Error())
 		}
 	}
 
@@ -196,6 +198,9 @@ func syncCmd(remote *ftl.RemoteRepository, local *ftl.LocalRepository) error {
 		}
 
 		err = downloadRemoteRevisions(remote, local, download)
+		if err != nil {
+			return err
+		}
 
 		if curRev.Revision != "" {
 			err = local.Jump(curRev)
@@ -285,6 +290,8 @@ func listRemotePackagesCmd(remote *ftl.RemoteRepository) error {
 func capturePackageScriptError(err error) error {
 	if pse, ok := err.(*ftl.PackageScriptError); ok {
 		return cli.NewExitError(pse.Error(), pse.WaitStatus.ExitStatus())
+	} else if err != nil {
+		return cli.NewExitError(err.Error(), 1)
 	} else {
 		return err
 	}

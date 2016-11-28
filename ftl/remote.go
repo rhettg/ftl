@@ -3,7 +3,6 @@ package ftl
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 type RemoteRepository struct {
@@ -75,8 +75,7 @@ func (rr *RemoteRepository) ListPackages() (pkgs []string, err error) {
 	return
 }
 
-// TODO: I think this needs to deal with files on disk rather than readers.
-func (rr *RemoteRepository) GetRevisionReader(revision RevisionInfo) (fileName string, reader io.ReadCloser, err error) {
+func (rr *RemoteRepository) GetRevision(revision RevisionInfo) (filePath string, err error) {
 	listResp, err := rr.svc.ListObjects(
 		&s3.ListObjectsInput{
 			Bucket:    aws.String(rr.bucketName),
@@ -90,16 +89,27 @@ func (rr *RemoteRepository) GetRevisionReader(revision RevisionInfo) (fileName s
 	}
 
 	if len(listResp.Contents) > 0 {
-		fileName = *listResp.Contents[0].Key
-		var o *s3.GetObjectOutput
-		o, err = rr.svc.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(rr.bucketName),
-			Key:    listResp.Contents[0].Key})
+		var tmpDir string
+		tmpDir, err = ioutil.TempDir("", revision.Name())
+		if err != nil {
+			return
+		}
+
+		filePath = filepath.Join(tmpDir, aws.StringValue(listResp.Contents[0].Key))
+
+		var tmpFile *os.File
+		tmpFile, err = os.Create(filePath)
+		defer tmpFile.Close()
+
+		downloader := s3manager.NewDownloaderWithClient(rr.svc)
+		_, err = downloader.Download(tmpFile,
+			&s3.GetObjectInput{
+				Bucket: aws.String(rr.bucketName),
+				Key:    listResp.Contents[0].Key})
 
 		if err != nil {
 			return
 		}
-		reader = o.Body
 	}
 
 	return
