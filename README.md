@@ -115,9 +115,9 @@ Deployment Package
 
 Package names are inferred from the spooled file name, extracting the string up to the first `.`.
 
-The file can be of any format, but there is special handling for `.tar`, `.gz`
-and `.tgz` files.  For these, we'll unzip and/or untar them into the revision
-directory for you.
+The file can be of any format, but there is special handling for Tar files
+(`.tar`, `.tgz` and `.tar.gz`) For these, we'll unzip and/or untar them into
+the revision directory for you.
 
 In addition, if specially named scripts are provided in the tar file, we'll run
 them at the specified steps in the deployment.

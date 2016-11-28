@@ -195,47 +195,22 @@ func (lr *LocalRepository) Add(revision RevisionInfo, filePath string) (err erro
 		return fmt.Errorf("Checksum does not match")
 	}
 
-	if filepath.Ext(revisionFilePath) == ".gz" {
-		cmd := exec.Command("gunzip", revisionFilePath)
-		err = cmd.Run()
-		if err != nil {
-			return fmt.Errorf("Failed to unzip: %s", err.Error())
-		}
-		revisionFilePath = revisionFilePath[0 : len(revisionFilePath)-len(".gz")]
+	var tarOpts string
+	if strings.HasSuffix(revisionFilePath, ".tar.gz") || strings.HasSuffix(revisionFilePath, ".tgz") {
+		tarOpts = "-xzf"
+
+	} else if strings.HasSuffix(revisionFilePath, ".tar") {
+		tarOpts = "-xf"
 	}
 
-	fileName := filepath.Base(revisionFilePath)
-	dotNdx := strings.LastIndex(fileName, ".")
-	var fileBase string
-	if dotNdx >= 0 {
-		fileBase = fileName[0:dotNdx]
-	} else {
-		fileBase = fileName
-	}
-
-	revisionFilePrefix := filepath.Join(revisionPath, fileBase)
-
-	_, err = os.Stat(revisionFilePrefix + ".tar")
-	if err == nil {
-		cmd := exec.Command("tar", "-C", revisionPath, "-xf", revisionFilePrefix+".tar")
+	if tarOpts != "" {
+		cmd := exec.Command("tar", "-C", revisionPath, tarOpts, revisionFilePath)
 		err = cmd.Run()
 		if err != nil {
 			return fmt.Errorf("Failed to untar: %s", err.Error())
 		}
-		err = os.Remove(revisionFilePrefix + ".tar")
-		if err != nil {
-			return fmt.Errorf("Failed to cleanup: %s", err.Error())
-		}
-	}
 
-	_, err = os.Stat(revisionFilePrefix + ".tgz")
-	if err == nil {
-		cmd := exec.Command("tar", "-C", revisionPath, "-xzf", revisionFilePrefix+".tgz")
-		err = cmd.Run()
-		if err != nil {
-			return fmt.Errorf("Failed to untar: %s", err.Error())
-		}
-		err = os.Remove(revisionFilePrefix + ".tgz")
+		err = os.Remove(revisionFilePath)
 		if err != nil {
 			return fmt.Errorf("Failed to cleanup: %s", err.Error())
 		}
