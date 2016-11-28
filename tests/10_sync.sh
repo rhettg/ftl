@@ -19,11 +19,11 @@ assert "cat $FTL_ROOT/pegasus/revs/$version/data/data.txt" "hello world"
 assert_raises "test -d $FTL_ROOT/pegasus/current" 1
 
 assert_raises "$FTL jump --remote $revision"
-assert_raises "$FTL list --remote pegasus | grep $revision | grep active"
+assert_raises "$FTL list --remote pegasus | grep $revision | grep current"
 
 assert_raises "$FTL sync"
 
-assert_raises "$FTL list pegasus | grep $revision | grep active"
+assert_raises "$FTL list pegasus | grep $revision | grep current"
 
 assert "cat $FTL_ROOT/pegasus/current/data/data.txt" "hello world"
 assert_end sync

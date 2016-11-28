@@ -240,7 +240,7 @@ func listCmd(lr *ftl.LocalRepository, packageName string) {
 
 	for _, revision := range lr.ListRevisions(packageName) {
 		if revision.Equal(activeRev) {
-			fmt.Printf("%s\t(active)\n", revision.Name())
+			fmt.Printf("%s\t(current)\n", revision.Name())
 		} else {
 			fmt.Println(revision.Name())
 		}
@@ -260,7 +260,7 @@ func listRemoteCmd(rr *ftl.RemoteRepository, packageName string) error {
 
 	for _, revision := range revisionList {
 		if revision.Equal(activeRev) {
-			fmt.Printf("%s\t(active)\n", revision.Name())
+			fmt.Printf("%s\t(current)\n", revision.Name())
 		} else {
 			fmt.Println(revision.Name())
 		}
